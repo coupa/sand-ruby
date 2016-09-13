@@ -1,12 +1,14 @@
-require 'oauth2'
-require 'net/http'
+require 'faraday'
 require 'json'
 require 'time'
-require 'uri'
 
 module Sand
   class Service < Client
     attr_accessor :resource, :token_verify_path, :target_scopes, :default_exp_time
+
+    def self.cache_type
+      'tokens'
+    end
 
     # opts = {
     #   resource: Required. This service's unique resource name registered with SAND
@@ -74,7 +76,7 @@ module Sand
     def verify_token(token, action = 'any')
       return {'allowed' => false} if token.to_s.strip.empty?
       # retry_on_error is false because service does not retry token verification
-      access_token = get_token('service_access_token', false)
+      access_token = token('service_access_token', false)
       data = {
         scopes: @target_scopes.to_s.split,
         token: token,
@@ -82,12 +84,16 @@ module Sand
         action: action,
         context: {},
       }
-      uri = URI.parse(@token_site + @token_verify_path)
-      http = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl = true
-      http.verify_mode = OpenSSL::SSL::VERIFY_NONE if @skip_tls_verify == true
-      resp = http.post(uri.request_uri, data.to_json, 'Authorization' => "Bearer #{access_token}")
-
+      conn = Faraday.new(url: @token_site) do |faraday|
+        faraday.ssl.verify = false if @skip_tls_verify == true
+        faraday.adapter(Faraday.default_adapter)
+      end
+      conn.authorization(:Bearer, access_token)
+      resp = conn.post do |req|
+        req.url @token_verify_path
+        req.headers['Content-Type'] = 'application/json'
+        req.body = data.to_json
+      end
       JSON.parse(resp.body)
     end
 

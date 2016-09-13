@@ -4,9 +4,9 @@ describe Sand::Client do
   let(:client) { Sand::Client.new(client_id: 'a', client_secret: 'b', token_site: 'http://localhost', token_path: '/abc', max_retry: 2, cache: Sand::Memory.cache) }
   after{ client.cache.clear if client.cache }
 
-  describe '#get_token' do
+  describe '#token' do
     let(:resource) { 'test' }
-    subject{ client.get_token(resource) }
+    subject{ client.token(resource) }
     before{ allow(client).to receive(:oauth_token).and_return({access_token: 'retrieve_token', expires_in: 60}) }
 
     context 'resource is empty' do
@@ -47,7 +47,16 @@ describe Sand::Client do
 
       it 'gets the token from SAND' do
         expect(client).to receive(:oauth_token)
-        expect(subject).not_to eq('testToken')
+        expect(subject).to eq('retrieve_token')
+      end
+
+      context 'with an empty token' do
+        before{ allow(client).to receive(:oauth_token).and_return({access_token: '', expires_in: 60}) }
+
+        it 'gets the token from SAND' do
+          expect(client).to receive(:oauth_token)
+          expect{subject}.to raise_error(Sand::TokenIsEmptyError)
+        end
       end
     end
   end
@@ -78,7 +87,7 @@ describe Sand::Client do
     end
 
     context 'on network error' do
-      before { allow_any_instance_of(OAuth2::Strategy::ClientCredentials).to receive(:get_token).and_raise(Faraday::ConnectionFailed.new('ex')) }
+      before { allow_any_instance_of(OAuth2::Strategy::ClientCredentials).to receive(:token).and_raise(Faraday::ConnectionFailed.new('ex')) }
 
       context 'without retry_on_error' do
         it 'should raise error and not call sleep' do

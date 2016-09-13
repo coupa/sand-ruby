@@ -4,7 +4,7 @@ require 'time'
 describe Sand::Service do
   let(:service) { Sand::Service.new(client_id: 'a', client_secret: 'b', token_site: 'http://localhost', token_path: '/abc', resource: 'cers', token_verify_path: '/verify/token', cache: Sand::Memory.cache) }
 
-  before { allow(service).to receive(:get_token) }
+  before { allow(service).to receive(:token).and_return("fake_token") }
   after { service.cache.clear if service.cache }
 
   describe '#check_request' do
@@ -206,9 +206,9 @@ describe Sand::Service do
       end
     end
 
-    describe 'cases of response' do
+    describe 'difference cases of response' do
       let(:body) { '' }
-      before{ allow_any_instance_of(Net::HTTP).to receive(:post).and_return(Response.new(body)) }
+      before{ allow_any_instance_of(Faraday::Connection).to receive(:post).and_return(Response.new(body)) }
 
       context 'token allowed' do
         let(:body) { {allowed: 'yes'}.to_json }
@@ -240,10 +240,10 @@ describe Sand::Service do
     subject{ service.expiry_time(str_time) }
 
     context 'with future expiry time' do
-      let(:str_time) { (Time.now + service.default_exp_time + 1000).iso8601 }
+      let(:str_time) { (Time.now + 1000).iso8601 }
 
       it 'returns expiry time that is not the default' do
-        expect(subject).to be > service.default_exp_time + 10
+        expect(subject).not_to eq(service.default_exp_time)
       end
     end
 
