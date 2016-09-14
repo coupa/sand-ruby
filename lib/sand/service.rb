@@ -75,8 +75,7 @@ module Sand
     #   {"allowed":false}
     def verify_token(token, action = 'any')
       return {'allowed' => false} if token.to_s.strip.empty?
-      # retry_on_error is false because service does not retry token verification
-      access_token = token('service_access_token', false)
+      access_token = token('service_access_token')
       data = {
         scopes: @target_scopes.to_s.split,
         token: token,

@@ -26,6 +26,10 @@ module Sand
         @store.clear
       end
 
+      def delete(name, opts = nil)
+        @store.delete(name)
+      end
+
     protected
 
       def cache_key(name)
