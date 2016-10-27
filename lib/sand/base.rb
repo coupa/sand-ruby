@@ -31,12 +31,12 @@ module Sand
       @cache_root = opts.delete(:cache_root) || 'sand'
     end
 
-    def self.cache_name
+    def self.cache_type
       raise NotImplementedError
     end
 
     def cache_key(key)
-      [@cache_root, self.class.cache_name] + Array(key)
+      [@cache_root, self.class.cache_type] + Array(key)
     end
   end
 end

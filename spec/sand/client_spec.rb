@@ -4,9 +4,55 @@ describe Sand::Client do
   let(:client) { Sand::Client.new(client_id: 'a', client_secret: 'b', token_site: 'http://localhost', token_path: '/abc', max_retry: 2, cache: Sand::Memory.cache) }
   after{ client.cache.clear if client.cache }
 
-  describe '#get_token' do
+  describe '#request' do
+    let(:response) { 'good' }
+    subject do
+      client.request('test') { |token| response }
+    end
+    before{ allow(client).to receive(:token).and_return('abc') }
+
+    context 'with authorized response' do
+      it 'returns the response' do
+        allow(response).to receive(:status).and_return(200)
+        expect(subject).to eq(response)
+
+        allow(response).to receive(:code).and_return(200)
+        expect(subject).to eq(response)
+      end
+    end
+
+    context 'with unknown response code' do
+      it 'raises unsupported error' do
+        expect{subject}.to raise_error(Sand::UnsupportedResponseError)
+      end
+    end
+
+    context 'with unauthorized response' do
+      before{ allow(response).to receive(:code).and_return(401) }
+
+      context 'with retry' do
+        it 'performs retry and raises error' do
+          expect(client).to receive(:sleep).exactly(2).times
+          expect{subject}.to raise_error(Sand::TokenNotAuthorizedError)
+        end
+      end
+
+      context 'without retry' do
+        subject do
+          client.max_retry = 0
+          client.request('test') { |token| response }
+        end
+        it 'raises error' do
+          expect(client).not_to receive(:sleep)
+          expect{subject}.to raise_error(Sand::TokenNotAuthorizedError)
+        end
+      end
+    end
+  end
+
+  describe '#token' do
     let(:resource) { 'test' }
-    subject{ client.get_token(resource) }
+    subject{ client.token(resource) }
     before{ allow(client).to receive(:oauth_token).and_return({access_token: 'retrieve_token', expires_in: 60}) }
 
     context 'resource is empty' do
@@ -47,7 +93,16 @@ describe Sand::Client do
 
       it 'gets the token from SAND' do
         expect(client).to receive(:oauth_token)
-        expect(subject).not_to eq('testToken')
+        expect(subject).to eq('retrieve_token')
+      end
+
+      context 'with an empty token' do
+        before{ allow(client).to receive(:oauth_token).and_return({access_token: '', expires_in: 60}) }
+
+        it 'gets the token from SAND' do
+          expect(client).to receive(:oauth_token)
+          expect{subject}.to raise_error(Sand::TokenIsEmptyError)
+        end
       end
     end
   end
@@ -57,7 +112,7 @@ describe Sand::Client do
       before { allow_any_instance_of(OAuth2::Strategy::ClientCredentials).to receive(:get_token).and_return(Token.new('token', 60)) }
 
       it 'returns token and expiry time' do
-        t = client.oauth_token(false)
+        t = client.oauth_token
         expect(t[:access_token]).to eq('token')
         expect(t[:expires_in]).to eq(60)
       end
@@ -66,31 +121,35 @@ describe Sand::Client do
     context 'on non-network error' do
       before { allow_any_instance_of(OAuth2::Strategy::ClientCredentials).to receive(:get_token).and_raise(StandardError) }
 
-      it 'should raise error and not call sleep with retry_on_error off' do
+      it 'should raise error and not call sleep without retry' do
+        client.max_retry = 0
         expect(client).not_to receive(:sleep)
-        expect{client.oauth_token(false)}.to raise_error(StandardError)
+        expect{client.oauth_token}.to raise_error(StandardError)
       end
 
-      it 'should raise error and not call sleep with retry_on_error on' do
+      it 'should raise error and not call sleep with retry' do
+        client.max_retry = 2
         expect(client).not_to receive(:sleep)
-        expect{client.oauth_token(true)}.to raise_error(StandardError)
+        expect{client.oauth_token}.to raise_error(StandardError)
       end
     end
 
     context 'on network error' do
-      before { allow_any_instance_of(OAuth2::Strategy::ClientCredentials).to receive(:get_token).and_raise(Faraday::ConnectionFailed.new('ex')) }
+      before { allow_any_instance_of(OAuth2::Strategy::ClientCredentials).to receive(:token).and_raise(Faraday::ConnectionFailed.new('ex')) }
 
-      context 'without retry_on_error' do
+      context 'without retry' do
         it 'should raise error and not call sleep' do
+          client.max_retry = 0
           expect(client).not_to receive(:sleep)
-          expect{client.oauth_token(false)}.to raise_error(Faraday::ConnectionFailed)
+          expect{client.oauth_token}.to raise_error(Faraday::ConnectionFailed)
         end
       end
 
-      context 'with retry_on_error on' do
+      context 'with retry on' do
         it 'should raise error and call sleep' do
+          client.max_retry = 2
           expect(client).to receive(:sleep).exactly(2).times
-          expect{client.oauth_token(true)}.to raise_error(Faraday::ConnectionFailed)
+          expect{client.oauth_token}.to raise_error(Faraday::ConnectionFailed)
         end
       end
     end
