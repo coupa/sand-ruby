@@ -75,7 +75,7 @@ module Sand
     #   {"allowed":false}
     def verify_token(token, action = 'any')
       return {'allowed' => false} if token.to_s.strip.empty?
-      access_token = token('service_access_token')
+      access_token = token('service-access-token')
       data = {
         scopes: @target_scopes.to_s.split,
         token: token,
