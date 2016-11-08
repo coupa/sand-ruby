@@ -19,9 +19,9 @@ module Sand
     # client.request('some-service') do |token|
     #   # Make http request with net/http, Faraday, Httparty, etc...
     #   # with bearer token in the Authorization header
+    #   # return the response
     # end
     def request(resource_key, &block)
-      raise ArgumentError.new('resource_key cannot be empty') if resource_key.to_s.strip.empty?
       t = self.token(resource_key)
       resp = begin
         block.call(t)
@@ -60,8 +60,8 @@ module Sand
 
     # resource_key will be used as the cache key for caching the token
     def token(resource_key)
-      raise ArgumentError.new('resource_key cannot be empty') if resource_key.to_s.strip.empty?
       if @cache
+        raise ArgumentError.new('resource_key cannot be empty') if resource_key.to_s.strip.empty?
         token = @cache.read(cache_key(resource_key))
         return token unless token.nil?
       end
