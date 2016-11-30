@@ -22,6 +22,7 @@ module Sand
     #   # return the response
     # end
     def request(resource_key, &block)
+      restClientError = nil
       t = self.token(resource_key)
       resp = begin
         block.call(t)
@@ -30,6 +31,7 @@ module Sand
         # support the :response method
         # See "Exceptions" on https://github.com/rest-client/rest-client
         raise e unless e.respond_to?(:response)
+        restClientError = e
         e.response
       end
 
@@ -37,7 +39,10 @@ module Sand
         raise UnsupportedResponseError.new("Response unsupported: #{resp}")
       end
       num_retry = 0
-      while status_code(resp) == 401 && num_retry < @max_retry do
+      # Retry only when the status code is 401
+      # Get a fresh token from authentication and retry
+      while status_code(resp) == access_denied_code && num_retry < @max_retry do
+        restClientError = nil
         sleep 2 ** num_retry
         num_retry += 1
 
@@ -48,27 +53,27 @@ module Sand
           block.call(t)
         rescue => e
           raise e unless e.respond_to?(:response)
+          restClientError = e
           e.response
         end
       end if @max_retry > 0
 
-      if status_code(resp) == 401
-        raise TokenNotAuthorizedError.new("Failed to access `#{resource_key}` with token")
-      end
+      # This retains the behavior of RestClient, which raises error on all http error codes.
+      raise restClientError if restClientError
       resp
     end
 
     # resource_key will be used as the cache key for caching the token
     def token(resource_key)
-      if @cache
-        raise ArgumentError.new('resource_key cannot be empty') if resource_key.to_s.strip.empty?
+      resource_key = resource_key.to_s
+      if @cache && !resource_key.empty?
         token = @cache.read(cache_key(resource_key))
         return token unless token.nil?
       end
       hash = oauth_token
-      raise TokenIsEmptyError.new('Received a blank access token') if hash[:access_token].empty?
+      raise AuthenticationError.new('Invalid access token') if hash[:access_token].nil? || hash[:access_token].empty?
 
-      if @cache && hash[:expires_in] >= 0
+      if @cache && !resource_key.empty? && hash[:expires_in] >= 0
         #expires_in = 0 means no expiry limit
         @cache.write(cache_key(resource_key), hash[:access_token],
             expires_in: hash[:expires_in],
@@ -86,13 +91,13 @@ module Sand
       begin
         token = client.client_credentials.get_token(scope: @scopes)
         {access_token: token.token.to_s, expires_in: token.expires_in.to_i}
-      rescue Faraday::ConnectionFailed, Faraday::ResourceNotFound, Faraday::TimeoutError => e
+      rescue => e
         if num_retry < @max_retry
           sleep 2 ** num_retry
           num_retry += 1
           retry
         end
-        raise e
+        raise AuthenticationError.new(e)
       end
     end
 

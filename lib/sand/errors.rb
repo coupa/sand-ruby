@@ -1,8 +1,5 @@
 module Sand
-  class TokenIsEmptyError < StandardError
-  end
-
-  class TokenNotAuthorizedError < StandardError
+  class AuthenticationError < StandardError
   end
 
   class UnsupportedResponseError < StandardError

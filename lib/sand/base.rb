@@ -1,7 +1,7 @@
 module Sand
   class Base
     attr_accessor :client_id, :client_secret, :token_site, :token_path, :scopes,
-        :race_ttl_in_secs, :skip_tls_verify, :max_retry, :cache, :cache_root
+        :race_ttl_in_secs, :skip_tls_verify, :max_retry, :cache, :cache_root, :logger
 
     # opts = {
     #   client_id: Required
@@ -29,6 +29,7 @@ module Sand
       # If @cache is nil, there will be no caching of tokens.
       @cache = opts.delete(:cache)
       @cache_root = opts.delete(:cache_root) || 'sand'
+      @logger = opts.delete(:logger)
     end
 
     def self.cache_type
@@ -37,6 +38,18 @@ module Sand
 
     def cache_key(key)
       [@cache_root, self.class.cache_type] + Array(key)
+    end
+
+    # When services successfully check tokens with authentication service but the
+    # token is denied access, they must use this method to set the response code.
+    def access_denied_code
+      401
+    end
+
+    # When services raise error when checking a request's token, they must use
+    # this method to set the response code.
+    def error_code
+      502
     end
   end
 end
