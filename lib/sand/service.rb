@@ -27,21 +27,37 @@ module Sand
     # This can be used for Rails' http request that has the bearer token in the
     # "Authorization" header. It will extract the token and check with SAND to
     # verify whether the token client is allowed to access this service.
+    # Example code with Rails:
+    #   begin
+    #     allowed = sand_service.check_request(request, 'action')
+    #     render status: sand_service.access_denied_code if !allowed
+    #   rescue => e
+    #     render status: sand_service.error_code    # This will set 502
+    #   end
     def check_request(request, action = 'any')
       token = if request.respond_to?(:authorization)
         extract_token(request.authorization)
-      elsif request.respond_to?(:headers) && request.headers.key?('HTTP_AUTHORIZATION')
+      elsif request.respond_to?(:headers) && request.headers.respond_to?(:key?) && request.headers.key?('HTTP_AUTHORIZATION')
         extract_token(request.headers['HTTP_AUTHORIZATION'])
       else
-        nil
+        raise AuthenticationError.new('Failed to extract token from the request')
       end
-      token ? token_allowed?(token, action) : false
+      begin
+        return token_allowed?(token, action)
+      rescue => e
+        if logger
+          logger.error(e.message)
+          logger.error(e.backtrace[0..15].join("\n"))
+        end
+        raise AuthenticationError.new('Service failed to verify the token')
+      end
     end
 
     # Checks with SAND about whether the token is allowed to access this service.
     # The token and the result will be cached up to @default_exp_time
     def token_allowed?(token, action = 'any')
-      return false if token.to_s.strip.empty?
+      token = token.to_s.strip
+      return false if token.empty?
       if @cache
         cached = @cache.read(cache_key(token))
         # The token is allowed iff the value is true
@@ -74,8 +90,10 @@ module Sand
     # Not allowed response:
     #   {"allowed":false}
     def verify_token(token, action = 'any')
-      return {'allowed' => false} if token.to_s.strip.empty?
-      access_token = token('service-access-token')
+      token = token.to_s
+      return {'allowed' => false} if token.empty?
+
+      access_token = self.token('service-access-token')
       data = {
         scopes: @target_scopes.to_s.split,
         token: token,
@@ -93,6 +111,7 @@ module Sand
         req.headers['Content-Type'] = 'application/json'
         req.body = data.to_json
       end
+      raise AuthenticationError.new("Error response from the authentication service: #{resp.status}") if resp.status != 200
       JSON.parse(resp.body)
     end
 

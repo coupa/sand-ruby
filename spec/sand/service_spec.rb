@@ -10,7 +10,7 @@ describe Sand::Service do
   describe '#check_request' do
     let(:request) { {} }
     subject{ service.check_request(request) }
-    before{ allow(service).to receive(:token_allowed?).and_return(true) }
+    before{ allow(service).to receive(:verify_token).and_return({'allowed' => true}) }
 
     context 'with request responds to authorization method' do
       context 'with valid bearer token' do
@@ -32,7 +32,15 @@ describe Sand::Service do
       context 'with invalid bearer token' do
         before{ allow(request).to receive(:authorization).and_return('ABCD') }
 
-        it 'should return false' do
+        it 'should return false because token extracted is empty' do
+          expect(subject).to be(false)
+        end
+      end
+
+      context 'with a blank token' do
+        before{ allow(request).to receive(:authorization).and_return('') }
+
+        it 'should return false because token extracted is empty' do
           expect(subject).to be(false)
         end
       end
@@ -50,15 +58,15 @@ describe Sand::Service do
       context 'without authorization header' do
         before{ allow(request).to receive(:headers).and_return({}) }
 
-        it 'should return false' do
-          expect(subject).to be(false)
+        it 'should raise an exception' do
+          expect{subject}.to raise_error(Sand::AuthenticationError, 'Failed to extract token from the request')
         end
       end
     end
 
     context 'without any authorization header method' do
-      it 'should return false' do
-        expect(subject).to be(false)
+      it 'should raise an exception' do
+        expect{subject}.to raise_error(Sand::AuthenticationError, 'Failed to extract token from the request')
       end
     end
   end
@@ -226,10 +234,19 @@ describe Sand::Service do
         end
       end
 
+      context 'error response' do
+        before{ allow_any_instance_of(Faraday::Connection).to receive(:post).and_return(Response.new(body, 502)) }
+
+        it 'raises authentication error' do
+          expect{subject}.to raise_error(Sand::AuthenticationError)
+        end
+      end
+
       class Response
-        attr_accessor :body
-        def initialize(body)
+        attr_accessor :body, :status
+        def initialize(body, status = 200)
           @body = body
+          @status = status
         end
       end
     end
