@@ -43,7 +43,9 @@ module Sand
       # Get a fresh token from authentication and retry
       while status_code(resp) == access_denied_code && num_retry < @max_retry do
         restClientError = nil
-        sleep 2 ** num_retry
+        secs = 2 ** num_retry
+        @logger.warn("Sand request: retrying after #{secs} sec on #{access_denied_code}") if @logger
+        sleep secs
         num_retry += 1
 
         # Prevent reading the token from cache
@@ -93,7 +95,9 @@ module Sand
         {access_token: token.token.to_s, expires_in: token.expires_in.to_i}
       rescue => e
         if num_retry < @max_retry
-          sleep 2 ** num_retry
+          secs = 2 ** num_retry
+          @logger.warn("Sand token: retrying after #{secs} sec due to error: #{e}") if @logger
+          sleep secs
           num_retry += 1
           retry
         end
