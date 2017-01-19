@@ -16,14 +16,16 @@ module Sand
     # block should perform normal HTTP request and returns a response. The response
     # needs to respond to :status (Faraday) or :code (net/http and Httparty)
     #
-    # client.request('some-service') do |token|
+    # If "caching_key" is empty, the token WILL NOT BE CACHED
+    #
+    # client.request('cache-key', 'scope1 scope2') do |token|
     #   # Make http request with net/http, Faraday, Httparty, etc...
     #   # with bearer token in the Authorization header
     #   # return the response
     # end
-    def request(resource_key, &block)
+    def request(caching_key, scopes = '', &block)
       restClientError = nil
-      t = self.token(resource_key)
+      t = self.token(caching_key, scopes)
       resp = begin
         block.call(t)
       rescue => e
@@ -49,8 +51,8 @@ module Sand
         num_retry += 1
 
         # Prevent reading the token from cache
-        @cache.delete(cache_key(resource_key)) if @cache
-        t = self.token(resource_key)
+        @cache.delete(cache_key(caching_key, scopes)) if @cache
+        t = self.token(caching_key, scopes)
         resp = begin
           block.call(t)
         rescue => e
@@ -65,19 +67,19 @@ module Sand
       resp
     end
 
-    # resource_key will be used as the cache key for caching the token
-    def token(resource_key)
-      resource_key = resource_key.to_s
-      if @cache && !resource_key.empty?
-        token = @cache.read(cache_key(resource_key))
+    # caching_key will be used as the cache key for caching the token
+    def token(caching_key, scopes = '')
+      caching_key = caching_key.to_s
+      if @cache && !caching_key.empty?
+        token = @cache.read(cache_key(caching_key, scopes))
         return token unless token.nil?
       end
-      hash = oauth_token
+      hash = oauth_token(scopes)
       raise AuthenticationError.new('Invalid access token') if hash[:access_token].nil? || hash[:access_token].empty?
 
-      if @cache && !resource_key.empty? && hash[:expires_in] >= 0
+      if @cache && !caching_key.empty? && hash[:expires_in] >= 0
         #expires_in = 0 means no expiry limit
-        @cache.write(cache_key(resource_key), hash[:access_token],
+        @cache.write(cache_key(caching_key, scopes), hash[:access_token],
             expires_in: hash[:expires_in],
             race_condition_ttl: @race_ttl_in_secs)
       end
@@ -86,12 +88,12 @@ module Sand
 
     # If @max_retry > 0, it will retry up to @max_retry times with exponential
     # backoff time of 1, 2, 4, 8, 16,... seconds
-    def oauth_token
+    def oauth_token(scopes = '')
       client = OAuth2::Client.new(@client_id, @client_secret,
           :site => @token_site, token_url: @token_path, :ssl => {:verify => @skip_tls_verify != true})
       num_retry = 0
       begin
-        token = client.client_credentials.get_token(scope: @scopes)
+        token = client.client_credentials.get_token(scope: scopes)
         {access_token: token.token.to_s, expires_in: token.expires_in.to_i}
       rescue => e
         if num_retry < @max_retry

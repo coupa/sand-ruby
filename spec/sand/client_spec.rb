@@ -104,7 +104,8 @@ describe Sand::Client do
       before { allow_any_instance_of(OAuth2::Strategy::ClientCredentials).to receive(:get_token).and_return(Token.new('token', 60)) }
 
       it 'returns token and expiry time' do
-        t = client.oauth_token
+        expect_any_instance_of(OAuth2::Strategy::ClientCredentials).to receive(:get_token).with({scope: 'test scope'})
+        t = client.oauth_token('test scope')
         expect(t[:access_token]).to eq('token')
         expect(t[:expires_in]).to eq(60)
       end

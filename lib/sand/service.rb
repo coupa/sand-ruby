@@ -4,7 +4,7 @@ require 'time'
 
 module Sand
   class Service < Client
-    attr_accessor :resource, :token_verify_path, :target_scopes, :default_exp_time
+    attr_accessor :resource, :token_verify_path, :default_exp_time, :scopes
 
     def self.cache_type
       'tokens'
@@ -13,15 +13,15 @@ module Sand
     # opts = {
     #   resource: Required. This service's unique resource name registered with SAND
     #   token_verify_path: SAND's token allowed endpoint
-    #   target_scopes: A string of whitespace separated scopes. Scopes that this service require its clients to be in.
     #   default_exp_time: The default expiry time for cache for invalid tokens and also valid tokens without expiry times.
+    #   scopes: The scopes required to access the token verification endpoint
     # }
     def initialize(opts = {})
       super
       @resource = opts.delete(:resource) { |o| raise ArgumentError.new("#{o} is required") }
       @token_verify_path = opts.delete(:token_verify_path) { |o| raise ArgumentError.new("#{o} is required") }
-      @target_scopes = opts.delete(:target_scopes) || ''
       @default_exp_time = opts.delete(:default_exp_time) || 3600
+      @scopes = opts.delete(:scopes) || ''
     end
 
     # This can be used for Rails' http request that has the bearer token in the
@@ -34,7 +34,7 @@ module Sand
     #   rescue => e
     #     render status: sand_service.error_code    # This will set 502
     #   end
-    def check_request(request, action = 'any')
+    def check_request(request, target_scopes = '', action = '')
       token = if request.respond_to?(:authorization)
         extract_token(request.authorization)
       elsif request.respond_to?(:headers) && request.headers.respond_to?(:key?) && request.headers.key?('HTTP_AUTHORIZATION')
@@ -43,7 +43,7 @@ module Sand
         raise AuthenticationError.new('Failed to extract token from the request')
       end
       begin
-        return token_allowed?(token, action)
+        return token_allowed?(token, target_scopes, action)
       rescue => e
         if logger
           logger.error(e.message)
@@ -55,7 +55,7 @@ module Sand
 
     # Checks with SAND about whether the token is allowed to access this service.
     # The token and the result will be cached up to @default_exp_time
-    def token_allowed?(token, action = 'any')
+    def token_allowed?(token, target_scopes = '', action = '')
       token = token.to_s.strip
       return false if token.empty?
       if @cache
@@ -63,7 +63,7 @@ module Sand
         # The token is allowed iff the value is true
         return cached == true unless cached.nil?
       end
-      resp = verify_token(token, action)
+      resp = verify_token(token, target_scopes, action)
       if @cache
         if resp['allowed'] == true
           @cache.write(cache_key(token), true,
@@ -89,13 +89,13 @@ module Sand
     #
     # Not allowed response:
     #   {"allowed":false}
-    def verify_token(token, action = 'any')
+    def verify_token(token, target_scopes = '', action = '')
       token = token.to_s
       return {'allowed' => false} if token.empty?
 
-      access_token = self.token('service-access-token')
+      access_token = self.token('service-access-token', @scopes)
       data = {
-        scopes: @target_scopes.to_s.split,
+        scopes: target_scopes.to_s.split,
         token: token,
         resource: @resource,
         action: action,
