@@ -23,7 +23,7 @@ module Sand
     #   # with bearer token in the Authorization header
     #   # return the response
     # end
-    def request(caching_key, scopes = '', &block)
+    def request(caching_key, scopes = nil, &block)
       restClientError = nil
       t = self.token(caching_key, scopes)
       resp = begin
@@ -68,7 +68,7 @@ module Sand
     end
 
     # caching_key will be used as the cache key for caching the token
-    def token(caching_key, scopes = '')
+    def token(caching_key, scopes = nil)
       caching_key = caching_key.to_s
       if @cache && !caching_key.empty?
         token = @cache.read(cache_key(caching_key, scopes))
@@ -88,12 +88,12 @@ module Sand
 
     # If @max_retry > 0, it will retry up to @max_retry times with exponential
     # backoff time of 1, 2, 4, 8, 16,... seconds
-    def oauth_token(scopes = '')
+    def oauth_token(scopes = nil)
       client = OAuth2::Client.new(@client_id, @client_secret,
           :site => @token_site, token_url: @token_path, :ssl => {:verify => @skip_tls_verify != true})
       num_retry = 0
       begin
-        token = client.client_credentials.get_token(scope: scopes)
+        token = client.client_credentials.get_token(scope: Array(scopes).join(' '))
         {access_token: token.token.to_s, expires_in: token.expires_in.to_i}
       rescue => e
         if num_retry < @max_retry

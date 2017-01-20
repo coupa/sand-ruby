@@ -21,7 +21,7 @@ module Sand
       @resource = opts.delete(:resource) { |o| raise ArgumentError.new("#{o} is required") }
       @token_verify_path = opts.delete(:token_verify_path) { |o| raise ArgumentError.new("#{o} is required") }
       @default_exp_time = opts.delete(:default_exp_time) || 3600
-      @scopes = opts.delete(:scopes) || ''
+      @scopes = opts.delete(:scopes)
     end
 
     # This can be used for Rails' http request that has the bearer token in the
@@ -34,7 +34,7 @@ module Sand
     #   rescue => e
     #     render status: sand_service.error_code    # This will set 502
     #   end
-    def check_request(request, target_scopes = '', action = '')
+    def check_request(request, target_scopes = nil, action = '')
       token = if request.respond_to?(:authorization)
         extract_token(request.authorization)
       elsif request.respond_to?(:headers) && request.headers.respond_to?(:key?) && request.headers.key?('HTTP_AUTHORIZATION')
@@ -55,21 +55,21 @@ module Sand
 
     # Checks with SAND about whether the token is allowed to access this service.
     # The token and the result will be cached up to @default_exp_time
-    def token_allowed?(token, target_scopes = '', action = '')
+    def token_allowed?(token, target_scopes = nil, action = '')
       token = token.to_s.strip
       return false if token.empty?
       if @cache
-        cached = @cache.read(cache_key(token))
+        cached = @cache.read(cache_key(token, target_scopes))
         # The token is allowed iff the value is true
         return cached == true unless cached.nil?
       end
       resp = verify_token(token, target_scopes, action)
       if @cache
         if resp['allowed'] == true
-          @cache.write(cache_key(token), true,
+          @cache.write(cache_key(token, target_scopes), true,
               expires_in: expiry_time(resp['exp']), race_condition_ttl: @race_ttl_in_secs)
         else
-          @cache.write(cache_key(token), false,
+          @cache.write(cache_key(token, target_scopes), false,
               expires_in: @default_exp_time, race_condition_ttl: @race_ttl_in_secs)
         end
       end
@@ -89,13 +89,13 @@ module Sand
     #
     # Not allowed response:
     #   {"allowed":false}
-    def verify_token(token, target_scopes = '', action = '')
+    def verify_token(token, target_scopes = nil, action = '')
       token = token.to_s
       return {'allowed' => false} if token.empty?
 
       access_token = self.token('service-access-token', @scopes)
       data = {
-        scopes: target_scopes.to_s.split,
+        scopes: Array(target_scopes),
         token: token,
         resource: @resource,
         action: action,

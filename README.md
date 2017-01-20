@@ -31,7 +31,7 @@ opts = {
 }
 client = Sand::Client.new(opts)
 
-client.request('cache_key', 'scope1 scope2') do |token|
+client.request('cache_key', ['scope1', 'scope2']) do |token|
   # Make http request with net/http, Faraday, Httparty, etc...
   # with "Bearer token" in the Authorization header
   # return the response
@@ -48,14 +48,13 @@ opts = {
 
   # Below also shows their default values
   default_exp_time: 3600     # The default expiry time for cache for invalid tokens and also valid tokens without expiry times.
-  scopes:           ''       # The scopes required to access the token verification endpoint
-
+  scopes:           nil      # A string array of scopes required to access the token verification endpoint
 }
 service = Sand::Service.new(opts)
 
 # Usage Example with Rails request
 begin
-  allowed = service.check_request(request, 'target_scope1 target_scope2', 'action')
+  allowed = service.check_request(request, ['target_scope1', 'target_scope2'], 'action')
   render status: service.access_denied_code if !allowed
 rescue => e
   render status: service.error_code
@@ -64,7 +63,7 @@ end
 
 ### Client
 
-Sand::Client has the `check_request` method which can perform retry when encountering 401 responses from the service. This should be the primary method to use for a client.
+Sand::Client has the `request` method which can perform retry when encountering 401 responses from the service. This should be the primary method to use for a client.
 
 Both the Sand::Client and Sand::Service classes have the `token` method that gets an OAuth token from authentication service. If a cache store is available and the token is found in cache, it will return this token and not retrieving the token from the authentication service.
 
