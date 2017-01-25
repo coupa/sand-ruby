@@ -90,7 +90,9 @@ module Sand
     # backoff time of 1, 2, 4, 8, 16,... seconds
     def oauth_token(scopes = nil)
       client = OAuth2::Client.new(@client_id, @client_secret,
-          :site => @token_site, token_url: @token_path, :ssl => {:verify => @skip_tls_verify != true})
+          site: @token_site, token_url: @token_path,
+          ssl: {:verify => @skip_tls_verify != true},
+          auth_scheme: :basic_auth)
       num_retry = 0
       begin
         token = client.client_credentials.get_token(scope: Array(scopes).join(' '))
