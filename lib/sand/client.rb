@@ -89,6 +89,7 @@ module Sand
     # If @max_retry > 0, it will retry up to @max_retry times with exponential
     # backoff time of 1, 2, 4, 8, 16,... seconds
     def oauth_token(scopes = nil)
+      # The 'auth_scheme' option is for oauth2 1.3.0 gem, but it will work for 1.2 since it's just an option
       client = OAuth2::Client.new(@client_id, @client_secret,
           site: @token_site, token_url: @token_path,
           ssl: {:verify => @skip_tls_verify != true},
