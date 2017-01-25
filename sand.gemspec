@@ -31,6 +31,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake", "~> 10.0"
   spec.add_development_dependency "rspec", "~> 3.0"
 
-  spec.add_runtime_dependency 'oauth2', '~> 1.3.0'
+  spec.add_runtime_dependency 'oauth2', '>= 1.2.0'
   spec.add_runtime_dependency 'faraday', '~> 0.9.0'
 end
