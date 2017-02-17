@@ -108,7 +108,7 @@ describe Sand::Service do
 
   describe '#token_allowed?' do
     let(:token) { 'testToken' }
-    subject{ service.token_allowed?(token, ['scope']) }
+    subject{ service.token_allowed?(token, scopes: ['scope']) }
     before { allow(service).to receive(:verify_token) }
 
     context 'token is empty' do

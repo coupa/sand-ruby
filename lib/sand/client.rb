@@ -16,16 +16,27 @@ module Sand
     # block should perform normal HTTP request and returns a response. The response
     # needs to respond to :status (Faraday) or :code (net/http and Httparty)
     #
-    # If "caching_key" is empty, the token WILL NOT BE CACHED
+    # options[:cache_key]: If options[:cache_key] is empty, the token WILL NOT BE CACHED
     #
-    # client.request('cache-key', 'scope1 scope2') do |token|
+    # options[:num_retry]: Specifying options[:num_retry] (>= 0) number of retries for this request call.
+    # options[:num_retry] < 0 will default to @max_retry, equivalent to not giving this option.
+    # Retry delay increases expentially: 1, 2, 4, 8, 16,... seconds
+    #
+    # options[:scopes]: is an array of scope strings.
+    #
+    # # Example: this request will retry a maximum 2 times, 1 + 2 = 3 seconds
+    # client.request(cache_key: 'cache-key', scopes: ['scope1', 'scope2'], num_retry: 2) do |token|
     #   # Make http request with net/http, Faraday, Httparty, etc...
     #   # with bearer token in the Authorization header
     #   # return the response
     # end
-    def request(caching_key, scopes = nil, &block)
+    def request(options = {}, &block)
+      caching_key = options[:cache_key] || ''
+      scopes = options[:scopes]
+      retry_limit = options[:num_retry] && options[:num_retry].to_i >= 0 ? options[:num_retry].to_i : @max_retry
+
       restClientError = nil
-      t = self.token(caching_key, scopes)
+      t = self.token(options)
       resp = begin
         block.call(t)
       rescue => e
@@ -40,19 +51,22 @@ module Sand
       if status_code(resp).nil?
         raise UnsupportedResponseError.new("Response unsupported: #{resp}")
       end
-      num_retry = 0
+      retry_count = 0
       # Retry only when the status code is 401
       # Get a fresh token from authentication and retry
-      while status_code(resp) == access_denied_code && num_retry < @max_retry do
+      while status_code(resp) == access_denied_code && retry_count < retry_limit do
         restClientError = nil
-        secs = 2 ** num_retry
+        secs = 2 ** retry_count
         @logger.warn("Sand request: retrying after #{secs} sec on #{access_denied_code}") if @logger
         sleep secs
-        num_retry += 1
+        retry_count += 1
 
         # Prevent reading the token from cache
         @cache.delete(cache_key(caching_key, scopes)) if @cache
-        t = self.token(caching_key, scopes)
+
+        # Set number of retry to 0 on this token call, since we are already retrying
+        # here, don't retry when getting the token. Otherwise it may lock up for a long time
+        t = self.token(options.merge(num_retry: 0))
         resp = begin
           block.call(t)
         rescue => e
@@ -60,7 +74,7 @@ module Sand
           restClientError = e
           e.response
         end
-      end if @max_retry > 0
+      end if retry_limit > 0
 
       # This retains the behavior of RestClient, which raises error on all http error codes.
       raise restClientError if restClientError
@@ -68,13 +82,14 @@ module Sand
     end
 
     # caching_key will be used as the cache key for caching the token
-    def token(caching_key, scopes = nil)
-      caching_key = caching_key.to_s
+    def token(options = {})
+      scopes = options[:scopes]
+      caching_key = options.delete(:cache_key).to_s
       if @cache && !caching_key.empty?
         token = @cache.read(cache_key(caching_key, scopes))
         return token unless token.nil?
       end
-      hash = oauth_token(scopes)
+      hash = oauth_token(options)
       raise AuthenticationError.new('Invalid access token') if hash[:access_token].nil? || hash[:access_token].empty?
 
       if @cache && !caching_key.empty? && hash[:expires_in] >= 0
@@ -86,24 +101,28 @@ module Sand
       hash[:access_token]
     end
 
-    # If @max_retry > 0, it will retry up to @max_retry times with exponential
+    # If options[:num_retry] > 0, it will retry up to that many times with exponential
     # backoff time of 1, 2, 4, 8, 16,... seconds
-    def oauth_token(scopes = nil)
+    # If options[:num_retry] < 0, it will use @max_retry as the retry number
+    def oauth_token(options = {})
+      scopes = options[:scopes]
+      retry_limit = options[:num_retry] && options[:num_retry].to_i >= 0 ? options[:num_retry].to_i : @max_retry
+
       # The 'auth_scheme' option is for oauth2 1.3.0 gem, but it will work for 1.2 since it's just an option
       client = OAuth2::Client.new(@client_id, @client_secret,
           site: @token_site, token_url: @token_path,
           ssl: {:verify => @skip_tls_verify != true},
           auth_scheme: :basic_auth)
-      num_retry = 0
+      retry_count = 0
       begin
         token = client.client_credentials.get_token(scope: Array(scopes).join(' '))
         {access_token: token.token.to_s, expires_in: token.expires_in.to_i}
       rescue => e
-        if num_retry < @max_retry
-          secs = 2 ** num_retry
+        if retry_count < retry_limit
+          secs = 2 ** retry_count
           @logger.warn("Sand token: retrying after #{secs} sec due to error: #{e}") if @logger
           sleep secs
-          num_retry += 1
+          retry_count += 1
           retry
         end
         raise AuthenticationError.new(e)

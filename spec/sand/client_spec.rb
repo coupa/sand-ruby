@@ -7,7 +7,7 @@ describe Sand::Client do
   describe '#request' do
     let(:response) { 'good' }
     subject do
-      client.request('test') { |token| response }
+      client.request(cache_key: 'test') { |token| response }
     end
     before{ allow(client).to receive(:token).and_return('abc') }
 
@@ -40,10 +40,21 @@ describe Sand::Client do
       context 'without retry' do
         subject do
           client.max_retry = 0
-          client.request('test') { |token| response }
+          client.request(cache_key: 'test') { |token| response }
         end
         it 'returns 401 without retry' do
           expect(client).not_to receive(:sleep)
+          expect(subject.code).to eq(401)
+        end
+      end
+
+      context 'with per-request retry' do
+        subject do
+          client.max_retry = 0
+          client.request(cache_key: 'test', num_retry: 2) { |token| response }
+        end
+        it 'performs retry and returns 401 response' do
+          expect(client).to receive(:sleep).exactly(2).times
           expect(subject.code).to eq(401)
         end
       end
@@ -52,7 +63,7 @@ describe Sand::Client do
 
   describe '#token' do
     let(:resource) { 'test' }
-    subject{ client.token(resource, ['scope']) }
+    subject{ client.token(cache_key: resource, scopes: ['scope']) }
     before{ allow(client).to receive(:oauth_token).and_return({access_token: 'retrieve_token', expires_in: 60}) }
 
     describe 'reading from cache' do
@@ -105,7 +116,7 @@ describe Sand::Client do
 
       it 'returns token and expiry time' do
         expect_any_instance_of(OAuth2::Strategy::ClientCredentials).to receive(:get_token).with({scope: 'test scope'})
-        t = client.oauth_token(['test', 'scope'])
+        t = client.oauth_token(scopes: ['test', 'scope'])
         expect(t[:access_token]).to eq('token')
         expect(t[:expires_in]).to eq(60)
       end
@@ -127,6 +138,36 @@ describe Sand::Client do
           client.max_retry = 2
           expect(client).to receive(:sleep).exactly(2).times
           expect{client.oauth_token}.to raise_error(Sand::AuthenticationError)
+        end
+      end
+
+      context 'with per-request retry' do
+        it 'should call sleep and then raise error' do
+          client.max_retry = 0
+          expect(client).to receive(:sleep).exactly(3).times
+          expect{client.oauth_token(num_retry: 3)}.to raise_error(Sand::AuthenticationError)
+        end
+
+        context 'with per-request retry set to 0' do
+          it 'should not retry' do
+            client.max_retry = 3
+            expect(client).to receive(:sleep).exactly(0).times
+            expect{client.oauth_token(num_retry: 0)}.to raise_error(Sand::AuthenticationError)
+          end
+        end
+
+        context 'with per-request retry set to nil or a negative number' do
+          it 'should default to max_retry for number of retries' do
+            client.max_retry = 3
+            expect(client).to receive(:sleep).exactly(3).times
+            expect{client.oauth_token(num_retry: -1)}.to raise_error(Sand::AuthenticationError)
+          end
+
+          it 'should default to max_retry for number of retries' do
+            client.max_retry = 3
+            expect(client).to receive(:sleep).exactly(3).times
+            expect{client.oauth_token(num_retry: nil)}.to raise_error(Sand::AuthenticationError)
+          end
         end
       end
     end
