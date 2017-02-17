@@ -31,7 +31,7 @@ opts = {
 }
 client = Sand::Client.new(opts)
 
-client.request('cache_key', ['scope1', 'scope2']) do |token|
+client.request(cache_key: 'cache_key', scopes: ['scope1', 'scope2'], num_retry: 3) do |token|
   # Make http request with net/http, Faraday, Httparty, etc...
   # with "Bearer token" in the Authorization header
   # return the response
@@ -54,7 +54,7 @@ service = Sand::Service.new(opts)
 
 # Usage Example with Rails request
 begin
-  allowed = service.check_request(request, ['target_scope1', 'target_scope2'], 'action')
+  allowed = service.check_request(request, scopes: ['target_scope1', 'target_scope2'], action: 'action', num_retry: 3)
   render status: service.access_denied_code if !allowed
 rescue => e
   render status: service.error_code

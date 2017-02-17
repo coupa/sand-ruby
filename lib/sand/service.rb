@@ -27,14 +27,24 @@ module Sand
     # This can be used for Rails' http request that has the bearer token in the
     # "Authorization" header. It will extract the token and check with SAND to
     # verify whether the token client is allowed to access this service.
+    #
+    # options[:num_retry]: Number of retries is defaulted to @max_retry unless options[:num_retry] is given
+    # on a per request basis. For a service, num_retry is applied when it has problem
+    # connecting to Sand for an access token. The token verificatioin
+    # does not perform any retry.
+    #
+    # options[:scopes]: An array of scopes to check whether the client has permission to access
+    #
+    # options[:action]: A string to check if the client is allowed to perform
+    #
     # Example code with Rails:
     #   begin
-    #     allowed = sand_service.check_request(request, 'action')
+    #     allowed = sand_service.check_request(request, scopes: ['scope'], action: 'action', num_retry: 1)
     #     render status: sand_service.access_denied_code if !allowed
     #   rescue => e
     #     render status: sand_service.error_code    # This will set 502
     #   end
-    def check_request(request, target_scopes = nil, action = '')
+    def check_request(request, options = {})
       token = if request.respond_to?(:authorization)
         extract_token(request.authorization)
       elsif request.respond_to?(:headers) && request.headers.respond_to?(:key?) && request.headers.key?('HTTP_AUTHORIZATION')
@@ -43,7 +53,7 @@ module Sand
         raise AuthenticationError.new('Failed to extract token from the request')
       end
       begin
-        return token_allowed?(token, target_scopes, action)
+        return token_allowed?(token, options)
       rescue => e
         if logger
           logger.error(e.message)
@@ -55,7 +65,9 @@ module Sand
 
     # Checks with SAND about whether the token is allowed to access this service.
     # The token and the result will be cached up to @default_exp_time
-    def token_allowed?(token, target_scopes = nil, action = '')
+    def token_allowed?(token, options = {})
+      target_scopes = options[:scopes]
+
       token = token.to_s.strip
       return false if token.empty?
       if @cache
@@ -63,7 +75,7 @@ module Sand
         # The token is allowed iff the value is true
         return cached == true unless cached.nil?
       end
-      resp = verify_token(token, target_scopes, action)
+      resp = verify_token(token, options)
       if @cache
         if resp['allowed'] == true
           @cache.write(cache_key(token, target_scopes), true,
@@ -89,16 +101,16 @@ module Sand
     #
     # Not allowed response:
     #   {"allowed":false}
-    def verify_token(token, target_scopes = nil, action = '')
+    def verify_token(token, options = {})
       token = token.to_s
       return {'allowed' => false} if token.empty?
 
-      access_token = self.token('service-access-token', @scopes)
+      access_token = self.token(cache_key: 'service-access-token', scopes: @scopes, num_retry: options[:num_retry])
       data = {
-        scopes: Array(target_scopes),
+        scopes: Array(options[:scopes]),
         token: token,
         resource: @resource,
-        action: action,
+        action: options[:action].to_s,
         context: {},
       }
       conn = Faraday.new(url: @token_site) do |faraday|
