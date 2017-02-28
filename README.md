@@ -54,8 +54,8 @@ service = Sand::Service.new(opts)
 
 # Usage Example with Rails request
 begin
-  allowed = service.check_request(request, scopes: ['target_scope1', 'target_scope2'], action: 'action', num_retry: 3)
-  render status: service.access_denied_code if !allowed
+  result = service.check_request(request, scopes: ['target_scope1', 'target_scope2'], action: 'action', num_retry: 5)
+  render status: service.access_denied_code if !result["allowed"]
 rescue => e
   render status: service.error_code
 end
@@ -70,3 +70,5 @@ Both the Sand::Client and Sand::Service classes have the `token` method that get
 ### Service
 
 The Sand::Service class defines the `check_request` method for verifying a request with the authentication service on whether the client token from the request is allowed to communicate with this service. A client's token and the verification result will also be cached if the cache is available.
+
+`check_request` returns a hash, say "result". If result["allowed"] is true, then result["sub"] is the subject who is making the request. If result["allowed"] is false, no other data will present.
