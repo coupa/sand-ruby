@@ -39,8 +39,8 @@ module Sand
     #
     # Example code with Rails:
     #   begin
-    #     allowed = sand_service.check_request(request, scopes: ['scope'], action: 'action', num_retry: 1)
-    #     render status: sand_service.access_denied_code if !allowed
+    #     result = sand_service.check_request(request, scopes: ['scope'], action: 'action', num_retry: 1)
+    #     render status: sand_service.access_denied_code if !result["allowed"]
     #   rescue => e
     #     render status: sand_service.error_code    # This will set 502
     #   end
