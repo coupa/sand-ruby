@@ -67,25 +67,23 @@ module Sand
     # The token and the result will be cached up to @default_exp_time
     def token_allowed?(token, options = {})
       target_scopes = options[:scopes]
-
       token = token.to_s.strip
-      return false if token.empty?
+      return {'allowed' => false} if token.empty?
+
       if @cache
         cached = @cache.read(cache_key(token, target_scopes))
-        # The token is allowed iff the value is true
-        return cached == true unless cached.nil?
+        return cached unless cached.nil?
       end
       resp = verify_token(token, options)
+      # To ensure that allowed is true if and only if it is really true
+      # If allowed is not true, make sure nothing else is included
+      resp = {'allowed' => false} unless resp['allowed'] == true
       if @cache
-        if resp['allowed'] == true
-          @cache.write(cache_key(token, target_scopes), true,
-              expires_in: expiry_time(resp['exp']), race_condition_ttl: @race_ttl_in_secs)
-        else
-          @cache.write(cache_key(token, target_scopes), false,
-              expires_in: @default_exp_time, race_condition_ttl: @race_ttl_in_secs)
-        end
+        exp = resp['allowed'] ? expiry_time(resp['exp']) : @default_exp_time
+        @cache.write(cache_key(token, target_scopes), resp,
+            expires_in: exp, race_condition_ttl: @race_ttl_in_secs)
       end
-      resp['allowed'] == true
+      resp
     end
 
     # Returns the token verification response body as a hash

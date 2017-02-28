@@ -22,8 +22,8 @@ describe Sand::Client do
     end
 
     context 'with unknown response code' do
-      it 'raises unsupported error' do
-        expect{subject}.to raise_error(Sand::UnsupportedResponseError)
+      it 'returns the response' do
+        expect(subject).to eq(response)
       end
     end
 
@@ -210,6 +210,12 @@ describe Sand::Client do
         expect(client.cache_key(nil, 'scope')).to eq('root/type//scope')
         expect(client.cache_key(nil, ['scope1', 'scope2'])).to eq('root/type//scope1_scope2')
       end
+    end
+  end
+
+  describe '#status_code' do
+    it 'returns nil when given nil' do
+      expect(client.send(:status_code, nil)).to be_nil
     end
   end
 end

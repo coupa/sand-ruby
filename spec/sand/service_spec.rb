@@ -17,7 +17,7 @@ describe Sand::Service do
         before{ allow(request).to receive(:authorization).and_return('Bearer ABCD') }
 
         it 'should return true' do
-          expect(subject).to be(true)
+          expect(subject['allowed']).to be(true)
         end
       end
 
@@ -25,7 +25,7 @@ describe Sand::Service do
         before{ allow(request).to receive(:authorization).and_return('bearer ABCD') }
 
         it 'should return true' do
-          expect(subject).to be(true)
+          expect(subject['allowed']).to be(true)
         end
       end
 
@@ -33,7 +33,7 @@ describe Sand::Service do
         before{ allow(request).to receive(:authorization).and_return('ABCD') }
 
         it 'should return false because token extracted is empty' do
-          expect(subject).to be(false)
+          expect(subject['allowed']).to be(false)
         end
       end
 
@@ -41,7 +41,7 @@ describe Sand::Service do
         before{ allow(request).to receive(:authorization).and_return('') }
 
         it 'should return false because token extracted is empty' do
-          expect(subject).to be(false)
+          expect(subject['allowed']).to be(false)
         end
       end
     end
@@ -51,7 +51,7 @@ describe Sand::Service do
         before{ allow(request).to receive(:headers).and_return({'HTTP_AUTHORIZATION' => 'Bearer ABCD'}) }
 
         it 'should return true' do
-          expect(subject).to be(true)
+          expect(subject['allowed']).to be(true)
         end
       end
 
@@ -115,16 +115,17 @@ describe Sand::Service do
       let(:token) { nil }
 
       it 'returns false ' do
-        expect(subject).to eq(false)
+        expect(subject['allowed']).to eq(false)
       end
     end
 
     describe 'cache operations' do
       context 'token and result already cached' do
         it 'gets the result from cache' do
-          service.cache.write(service.cache_key(token, ['scope']), true)
+          service.cache.write(service.cache_key(token, ['scope']), {'allowed' => true, 'sub' => 'test'})
           expect(service).not_to receive(:verify_token)
-          expect(subject).to be(true)
+          expect(subject['allowed']).to be(true)
+          expect(subject['sub']).to eq('test')
         end
       end
 
@@ -133,8 +134,8 @@ describe Sand::Service do
 
         it 'caches token verification result' do
           expect(service.cache.read(service.cache_key(token, ['scope']))).to be_nil
-          expect(subject).to be(false)
-          expect(service.cache.read(service.cache_key(token, ['scope']))).to be(false)
+          expect(subject['allowed']).to be(false)
+          expect(service.cache.read(service.cache_key(token, ['scope']))).to eq({'allowed' => false})
         end
       end
 
@@ -147,7 +148,7 @@ describe Sand::Service do
 
           it 'will compute the expiry time' do
             expect(service).to receive(:expiry_time)
-            expect(subject).to be(true)
+            expect(subject['allowed']).to be(true)
           end
         end
 
@@ -156,7 +157,7 @@ describe Sand::Service do
 
           it 'will use the default expiry time' do
             expect(service).to receive(:expiry_time)
-            expect(subject).to be(true)
+            expect(subject['allowed']).to be(true)
           end
         end
 
@@ -165,7 +166,7 @@ describe Sand::Service do
 
           it 'will use the default expiry time' do
             expect(service).not_to receive(:expiry_time)
-            expect(subject).to be(false)
+            expect(subject['allowed']).to be(false)
           end
         end
 
@@ -174,7 +175,7 @@ describe Sand::Service do
 
           it 'will use the default expiry time' do
             expect(service).not_to receive(:expiry_time)
-            expect(subject).to be(false)
+            expect(subject['allowed']).to be(false)
           end
         end
 
@@ -183,7 +184,7 @@ describe Sand::Service do
 
           it 'will use the default expiry time' do
             expect(service).not_to receive(:expiry_time)
-            expect(subject).to be(false)
+            expect(subject['allowed']).to be(false)
           end
         end
       end
@@ -192,12 +193,22 @@ describe Sand::Service do
     context 'without cache' do
       before do
         service.cache = nil
-        allow(service).to receive(:verify_token).and_return('allowed' => true)
+        allow(service).to receive(:verify_token).and_return('allowed' => true, 'sub' => 'test')
+        expect(service).to receive(:verify_token)
       end
 
       it 'gets the token from SAND' do
-        expect(service).to receive(:verify_token)
-        expect(subject).to be(true)
+        expect(subject['allowed']).to be(true)
+        expect(subject['sub']).to eq('test')
+      end
+
+      context 'and allowed is false' do
+        before{ allow(service).to receive(:verify_token).and_return('allowed' => false, 'sub' => 'test') }
+
+        it 'should not include subject' do
+          expect(subject['allowed']).to be(false)
+          expect(subject['sub']).to be_nil
+        end
       end
     end
   end
@@ -219,10 +230,11 @@ describe Sand::Service do
       before{ allow_any_instance_of(Faraday::Connection).to receive(:post).and_return(Response.new(body)) }
 
       context 'token allowed' do
-        let(:body) { {allowed: 'yes'}.to_json }
+        let(:body) { {'allowed' => 'yes', 'sub' => 'test'}.to_json }
 
         it 'returns the parsed response body as a hash' do
           expect(subject['allowed']).to eq('yes')
+          expect(subject['sub']).to eq('test')
         end
       end
 

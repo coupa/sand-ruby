@@ -43,36 +43,46 @@ module Sand
         # RestClient raises an error on all http error codes. RestClient errors
         # support the :response method
         # See "Exceptions" on https://github.com/rest-client/rest-client
-        raise e unless e.respond_to?(:response)
+        raise e if !e.respond_to?(:response) || status_code(e.response).nil?
         restClientError = e
         e.response
       end
 
+      # Return response if we can't get the status code of the response
       if status_code(resp).nil?
-        raise UnsupportedResponseError.new("Response unsupported: #{resp}")
+        logger.warn("Sand request: unable to get the response code and return without retrying") if logger
+        return resp
       end
+
       retry_count = 0
+      # Set number of retry to 0 for subsequent retry in getting the token, since
+      # the retry is done here already. Otherwise it may lock up for a long time
+      # when both are retrying.
+      options[:num_retry] = 0
+
       # Retry only when the status code is 401
       # Get a fresh token from authentication and retry
       while status_code(resp) == access_denied_code && retry_count < retry_limit do
         restClientError = nil
         secs = 2 ** retry_count
-        @logger.warn("Sand request: retrying after #{secs} sec on #{access_denied_code}") if @logger
+        logger.warn("Sand request: retrying after #{secs} sec on #{access_denied_code}") if logger
         sleep secs
         retry_count += 1
 
         # Prevent reading the token from cache
         @cache.delete(cache_key(caching_key, scopes)) if @cache
 
-        # Set number of retry to 0 on this token call, since we are already retrying
-        # here, don't retry when getting the token. Otherwise it may lock up for a long time
-        t = self.token(options.merge(num_retry: 0))
+        t = self.token(options)
         resp = begin
           block.call(t)
         rescue => e
-          raise e unless e.respond_to?(:response)
+          raise e if !e.respond_to?(:response) || status_code(e.response).nil?
           restClientError = e
           e.response
+        end
+        if status_code(resp).nil?
+          logger.warn("Sand request: unable to get the response code and return without retrying") if logger
+          return resp
         end
       end if retry_limit > 0
 
@@ -120,7 +130,7 @@ module Sand
       rescue => e
         if retry_count < retry_limit
           secs = 2 ** retry_count
-          @logger.warn("Sand token: retrying after #{secs} sec due to error: #{e}") if @logger
+          logger.warn("Sand token: retrying after #{secs} sec due to error: #{e}") if logger
           sleep secs
           retry_count += 1
           retry
