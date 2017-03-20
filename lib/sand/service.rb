@@ -53,7 +53,7 @@ module Sand
         raise AuthenticationError.new('Failed to extract token from the request')
       end
       begin
-        return token_allowed?(token, options)
+        return check_token(token, options)
       rescue => e
         if logger
           logger.error(e.message)
@@ -65,7 +65,7 @@ module Sand
 
     # Checks with SAND about whether the token is allowed to access this service.
     # The token and the result will be cached up to @default_exp_time
-    def token_allowed?(token, options = {})
+    def check_token(token, options = {})
       target_scopes = options[:scopes]
       token = token.to_s.strip
       return {'allowed' => false} if token.empty?

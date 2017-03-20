@@ -106,9 +106,9 @@ describe Sand::Service do
     end
   end
 
-  describe '#token_allowed?' do
+  describe '#check_token' do
     let(:token) { 'testToken' }
-    subject{ service.token_allowed?(token, scopes: ['scope']) }
+    subject{ service.check_token(token, scopes: ['scope']) }
     before { allow(service).to receive(:verify_token) }
 
     context 'token is empty' do
