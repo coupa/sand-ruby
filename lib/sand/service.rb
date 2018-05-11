@@ -18,10 +18,11 @@ module Sand
     # }
     def initialize(opts = {})
       super
-      @resource = opts.delete(:resource) { |o| raise ArgumentError.new("#{o} is required") }
+      @resource = opts.delete(:resource)
       @token_verify_path = opts.delete(:token_verify_path) { |o| raise ArgumentError.new("#{o} is required") }
       @default_exp_time = opts.delete(:default_exp_time) || 3600
       @scopes = opts.delete(:scopes)
+      @context = opts.fetch(:context, default_context)
     end
 
     # This can be used for Rails' http request that has the bearer token in the
@@ -66,23 +67,28 @@ module Sand
     # Checks with SAND about whether the token is allowed to access this service.
     # The token and the result will be cached up to @default_exp_time
     def check_token(token, options = {})
-      target_scopes = options[:scopes]
       token = token.to_s.strip
       return {'allowed' => false} if token.empty?
 
-      if @cache
-        cached = @cache.read(cache_key(token, target_scopes))
+      # Check if cached
+      ckey = cache_key(token, options[:scopes], options[:resource]) if @cache
+      if ckey
+        cached = @cache.read(ckey)
         return cached unless cached.nil?
       end
+
       resp = verify_token(token, options)
       # To ensure that allowed is true if and only if it is really true
       # If allowed is not true, make sure nothing else is included
       resp = {'allowed' => false} unless resp['allowed'] == true
-      if @cache
+
+      # Keep result in cache
+      if ckey
         exp = resp['allowed'] ? expiry_time(resp['exp']) : @default_exp_time
-        @cache.write(cache_key(token, target_scopes), resp,
+        @cache.write(ckey, resp,
             expires_in: exp, race_condition_ttl: @race_ttl_in_secs)
       end
+
       resp
     end
 
@@ -103,13 +109,16 @@ module Sand
       token = token.to_s
       return {'allowed' => false} if token.empty?
 
+      resource = options.fetch(:resource, @resource)
+      raise ArgumentError.new("resource is required") if resource.nil? || resource.empty?
+
       access_token = self.token(cache_key: 'service-access-token', scopes: @scopes, num_retry: options[:num_retry])
       data = {
         scopes: Array(options[:scopes]),
         token: token,
-        resource: @resource,
+        resource: resource,
         action: options[:action].to_s,
-        context: {},
+        context: options.fetch(:context, @context),
       }
       conn = Faraday.new(url: @token_site) do |faraday|
         faraday.ssl.verify = false if @skip_tls_verify == true
@@ -141,6 +150,12 @@ module Sand
       @default_exp_time
     rescue
       @default_exp_time
+    end
+
+    def default_context
+      # TODO: Consider adding remoteIP?
+      # See https://www.ory.sh/docs/guides/latest/1-hydra/2-overview/3-access-control
+      {}
     end
   end
 end

@@ -2,7 +2,62 @@ require 'spec_helper'
 require 'time'
 
 describe Sand::Service do
-  let(:service) { Sand::Service.new(client_id: 'a', client_secret: 'b', token_site: 'http://localhost', token_path: '/abc', resource: 'cers', token_verify_path: '/verify/token', cache: Sand::Memory.cache) }
+  RSpec.shared_examples 'a valid sand service' do
+    let(:body) { '' }
+    before{ allow_any_instance_of(Faraday::Connection).to receive(:post).and_return(Response.new(body)) }
+
+    context 'token allowed' do
+      let(:body) { {'allowed' => 'yes', 'sub' => 'test'}.to_json }
+
+      it 'returns the parsed response body as a hash' do
+        expect(subject['allowed']).to eq('yes')
+        expect(subject['sub']).to eq('test')
+      end
+    end
+
+    context 'malformed response' do
+      let(:body) { 'not json format' }
+
+      it 'raises JSON parse error' do
+        expect{subject}.to raise_error(JSON::ParserError)
+      end
+    end
+
+    context 'error response' do
+      before{ allow_any_instance_of(Faraday::Connection).to receive(:post).and_return(Response.new(body, 502)) }
+
+      it 'raises authentication error' do
+        expect{subject}.to raise_error(Sand::AuthenticationError)
+      end
+    end
+
+    class Response
+      attr_accessor :body, :status
+      def initialize(body, status = 200)
+        @body = body
+        @status = status
+      end
+    end
+  end
+
+  let(:service_client_id) { 'a' }
+  let(:service_client_secret) { 'b' }
+  let(:service_token_site) { 'http://localhost' }
+  let(:service_token_path) { '/abc' }
+  let(:service_resource) { 'cers' }
+  let(:service_token_verify_path) { '/verify/token' }
+  let(:service_cache) { Sand::Memory.cache }
+  let(:service) do
+    Sand::Service.new(
+      client_id: service_client_id,
+      client_secret: service_client_secret,
+      token_site: service_token_site,
+      token_path: service_token_path,
+      resource: service_resource,
+      token_verify_path: service_token_verify_path,
+      cache: service_cache,
+    )
+  end
 
   before { allow(service).to receive(:token).and_return("fake_token") }
   after { service.cache.clear if service.cache }
@@ -122,7 +177,7 @@ describe Sand::Service do
     describe 'cache operations' do
       context 'token and result already cached' do
         it 'gets the result from cache' do
-          service.cache.write(service.cache_key(token, ['scope']), {'allowed' => true, 'sub' => 'test'})
+          service.cache.write(service.cache_key(token, ['scope'], nil), {'allowed' => true, 'sub' => 'test'})
           expect(service).not_to receive(:verify_token)
           expect(subject['allowed']).to be(true)
           expect(subject['sub']).to eq('test')
@@ -133,9 +188,9 @@ describe Sand::Service do
         before{ allow(service).to receive(:verify_token).and_return('allowed' => false) }
 
         it 'caches token verification result' do
-          expect(service.cache.read(service.cache_key(token, ['scope']))).to be_nil
+          expect(service.cache.read(service.cache_key(token, ['scope'], nil))).to be_nil
           expect(subject['allowed']).to be(false)
-          expect(service.cache.read(service.cache_key(token, ['scope']))).to eq({'allowed' => false})
+          expect(service.cache.read(service.cache_key(token, ['scope'], nil))).to eq({'allowed' => false})
         end
       end
 
@@ -225,41 +280,21 @@ describe Sand::Service do
       end
     end
 
-    describe 'difference cases of response' do
-      let(:body) { '' }
-      before{ allow_any_instance_of(Faraday::Connection).to receive(:post).and_return(Response.new(body)) }
+    it_behaves_like 'a valid sand service'
 
-      context 'token allowed' do
-        let(:body) { {'allowed' => 'yes', 'sub' => 'test'}.to_json }
+    context 'service does not have a default resource' do
+      let(:service_resource) { nil }
 
-        it 'returns the parsed response body as a hash' do
-          expect(subject['allowed']).to eq('yes')
-          expect(subject['sub']).to eq('test')
+      context 'and resource was not given' do
+        it 'should raise an ArgumentError' do
+          expect { subject }.to raise_error(ArgumentError)
         end
       end
 
-      context 'malformed response' do
-        let(:body) { 'not json format' }
+      context 'and resource is passed' do
+        subject { service.verify_token(token, resource: 'b') }
 
-        it 'raises JSON parse error' do
-          expect{subject}.to raise_error(JSON::ParserError)
-        end
-      end
-
-      context 'error response' do
-        before{ allow_any_instance_of(Faraday::Connection).to receive(:post).and_return(Response.new(body, 502)) }
-
-        it 'raises authentication error' do
-          expect{subject}.to raise_error(Sand::AuthenticationError)
-        end
-      end
-
-      class Response
-        attr_accessor :body, :status
-        def initialize(body, status = 200)
-          @body = body
-          @status = status
-        end
+        it_behaves_like 'a valid sand service'
       end
     end
   end

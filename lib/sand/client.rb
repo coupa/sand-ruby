@@ -70,7 +70,7 @@ module Sand
         retry_count += 1
 
         # Prevent reading the token from cache
-        @cache.delete(cache_key(caching_key, scopes)) if @cache
+        @cache.delete(cache_key(caching_key, scopes, nil)) if @cache
 
         t = self.token(options)
         resp = begin
@@ -93,10 +93,12 @@ module Sand
 
     # caching_key will be used as the cache key for caching the token
     def token(options = {})
+      ckey = nil
       scopes = options[:scopes]
       caching_key = options.delete(:cache_key).to_s
       if @cache && !caching_key.empty?
-        token = @cache.read(cache_key(caching_key, scopes))
+        ckey = cache_key(caching_key, scopes, nil)
+        token = @cache.read(ckey)
         return token unless token.nil?
       end
       hash = oauth_token(options)
@@ -104,7 +106,7 @@ module Sand
 
       if @cache && !caching_key.empty? && hash[:expires_in] >= 0
         #expires_in = 0 means no expiry limit
-        @cache.write(cache_key(caching_key, scopes), hash[:access_token],
+        @cache.write(ckey, hash[:access_token],
             expires_in: hash[:expires_in],
             race_condition_ttl: @race_ttl_in_secs)
       end

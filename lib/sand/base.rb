@@ -34,9 +34,13 @@ module Sand
       raise NotImplementedError
     end
 
-    def cache_key(key, scopes)
-      scopes = Array(scopes).join('_')
-      ([@cache_root, self.class.cache_type, key] + (scopes.empty? ? [] : [scopes])).join('/')
+    def cache_key(key, scopes, resource)
+      ret = @cache_root.dup
+      ret << '/' << self.class.cache_type
+      ret << '/' << key.to_s
+      ret << '/' << Array(scopes).join('_') unless scopes.nil? || scopes.empty?
+      ret << '/' << resource unless resource.nil?
+      ret
     end
 
     # When services successfully check tokens with authentication service but the
