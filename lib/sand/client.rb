@@ -18,8 +18,9 @@ module Sand
     #
     # options[:cache_key]: If options[:cache_key] is empty, the token WILL NOT BE CACHED
     #
-    # options[:num_retry]: Specifying options[:num_retry] (>= 0) number of retries for this request call.
-    # options[:num_retry] < 0 will default to @max_retry, equivalent to not giving this option.
+    # options[:num_retry]: Specifying options[:num_retry] (>= 1) number of retries for this request call.
+    # It cannot be 0 because in case of expired tokens, at least 1 retry is required.
+    # options[:num_retry] < 1 will default to @default_retry_count, equivalent to not giving this option.
     # Retry delay increases expentially: 1, 2, 4, 8, 16,... seconds
     #
     # options[:scopes]: is an array of scope strings.
@@ -33,7 +34,12 @@ module Sand
     def request(options = {}, &block)
       caching_key = options[:cache_key] || ''
       scopes = options[:scopes]
-      retry_limit = options[:num_retry] && options[:num_retry].to_i >= 0 ? options[:num_retry].to_i : @max_retry
+      # request_retry_limit cannot be 0 or less, because if a client's token is
+      # expired, it must retry at least once to get a fresh token and try the request
+      # to service again
+      request_retry_limit = options[:num_retry].to_i
+      request_retry_limit = @default_retry_count if request_retry_limit < 1
+      request_retry_limit = 1 if request_retry_limit < 1
 
       restClientError = nil
       t = self.token(options)
@@ -55,14 +61,14 @@ module Sand
       end
 
       retry_count = 0
-      # Set number of retry to 0 for subsequent retry in getting the token, since
-      # the retry is done here already. Otherwise it may lock up for a long time
-      # when both are retrying.
+      # Set number of retry to 0 for the function that is getting the token, since
+      # the retry is done here already. Otherwise if both functions are retrying,
+      # it may lock up for a long time.
       options[:num_retry] = 0
 
       # Retry only when the status code is 401
       # Get a fresh token from authentication and retry
-      while status_code(resp) == access_denied_code && retry_count < retry_limit do
+      while status_code(resp) == access_denied_code && retry_count < request_retry_limit do
         restClientError = nil
         secs = 2 ** retry_count
         logger.warn("Sand request: retrying after #{secs} sec on #{access_denied_code}") if logger
@@ -84,7 +90,7 @@ module Sand
           logger.warn("Sand request: unable to get the response code and return without retrying") if logger
           return resp
         end
-      end if retry_limit > 0
+      end if request_retry_limit > 0
 
       # This retains the behavior of RestClient, which raises error on all http error codes.
       raise restClientError if restClientError
@@ -113,12 +119,12 @@ module Sand
       hash[:access_token]
     end
 
-    # If options[:num_retry] > 0, it will retry up to that many times with exponential
+    # If options[:num_retry] >= 0, it will retry up to that many times with exponential
     # backoff time of 1, 2, 4, 8, 16,... seconds
-    # If options[:num_retry] < 0, it will use @max_retry as the retry number
+    # If options[:num_retry] is not present or < 0, it will use @default_retry_count as the retry number
     def oauth_token(options = {})
       scopes = options[:scopes]
-      retry_limit = options[:num_retry] && options[:num_retry].to_i >= 0 ? options[:num_retry].to_i : @max_retry
+      retry_limit = options[:num_retry] && options[:num_retry].to_i >= 0 ? options[:num_retry].to_i : @default_retry_count
 
       # The 'auth_scheme' option is for oauth2 1.3.0 gem, but it will work for 1.2 since it's just an option
       client = OAuth2::Client.new(@client_id, @client_secret,
