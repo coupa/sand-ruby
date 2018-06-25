@@ -1,5 +1,6 @@
 require 'oauth2'
 require 'faraday'
+require 'cgi'
 
 module Sand
   class Client < Base
@@ -121,7 +122,7 @@ module Sand
       retry_limit = options[:num_retry] && options[:num_retry].to_i >= 0 ? options[:num_retry].to_i : @max_retry
 
       # The 'auth_scheme' option is for oauth2 1.3.0 gem, but it will work for 1.2 since it's just an option
-      client = OAuth2::Client.new(@client_id, @client_secret,
+      client = OAuth2::Client.new(CGI.escape(@client_id), CGI.escape(@client_secret),
           site: @token_site, token_url: @token_path,
           ssl: {:verify => @skip_tls_verify != true},
           auth_scheme: :basic_auth)
