@@ -1,7 +1,7 @@
 require 'spec_helper'
 
 describe Sand::Client do
-  let(:client) { Sand::Client.new(client_id: 'a', client_secret: 'b', token_site: 'http://localhost', token_path: '/abc', max_retry: 2, cache: Sand::Memory.cache) }
+  let(:client) { Sand::Client.new(client_id: 'a', client_secret: 'b', token_site: 'http://localhost', token_path: '/abc', default_retry_count: 2, cache: Sand::Memory.cache) }
   after{ client.cache.clear if client.cache }
 
   describe '#request' do
@@ -37,20 +37,20 @@ describe Sand::Client do
         end
       end
 
-      context 'without retry' do
+      context 'with default retry set to 0' do
         subject do
-          client.max_retry = 0
+          client.default_retry_count = 0
           client.request(cache_key: 'test') { |token| response }
         end
-        it 'returns 401 without retry' do
-          expect(client).not_to receive(:sleep)
+        it 'still performs retry once and returns 401 response' do
+          expect(client).to receive(:sleep).exactly(1).times
           expect(subject.code).to eq(401)
         end
       end
 
       context 'with per-request retry' do
         subject do
-          client.max_retry = 0
+          client.default_retry_count = 0
           client.request(cache_key: 'test', num_retry: 2) { |token| response }
         end
         it 'performs retry and returns 401 response' do
@@ -127,7 +127,7 @@ describe Sand::Client do
 
       context 'without retry' do
         it 'should raise error and not call sleep' do
-          client.max_retry = 0
+          client.default_retry_count = 0
           expect(client).not_to receive(:sleep)
           expect{client.oauth_token}.to raise_error(Sand::AuthenticationError)
         end
@@ -135,7 +135,7 @@ describe Sand::Client do
 
       context 'with retry' do
         it 'should call sleep and then raise error' do
-          client.max_retry = 2
+          client.default_retry_count = 2
           expect(client).to receive(:sleep).exactly(2).times
           expect{client.oauth_token}.to raise_error(Sand::AuthenticationError)
         end
@@ -143,28 +143,28 @@ describe Sand::Client do
 
       context 'with per-request retry' do
         it 'should call sleep and then raise error' do
-          client.max_retry = 0
+          client.default_retry_count = 0
           expect(client).to receive(:sleep).exactly(3).times
           expect{client.oauth_token(num_retry: 3)}.to raise_error(Sand::AuthenticationError)
         end
 
         context 'with per-request retry set to 0' do
           it 'should not retry' do
-            client.max_retry = 3
+            client.default_retry_count = 3
             expect(client).to receive(:sleep).exactly(0).times
             expect{client.oauth_token(num_retry: 0)}.to raise_error(Sand::AuthenticationError)
           end
         end
 
         context 'with per-request retry set to nil or a negative number' do
-          it 'should default to max_retry for number of retries' do
-            client.max_retry = 3
+          it 'should default to default_retry_count for number of retries' do
+            client.default_retry_count = 3
             expect(client).to receive(:sleep).exactly(3).times
             expect{client.oauth_token(num_retry: -1)}.to raise_error(Sand::AuthenticationError)
           end
 
-          it 'should default to max_retry for number of retries' do
-            client.max_retry = 3
+          it 'should default to default_retry_count for number of retries' do
+            client.default_retry_count = 3
             expect(client).to receive(:sleep).exactly(3).times
             expect{client.oauth_token(num_retry: nil)}.to raise_error(Sand::AuthenticationError)
           end

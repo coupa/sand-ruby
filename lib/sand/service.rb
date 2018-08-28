@@ -29,7 +29,7 @@ module Sand
     # "Authorization" header. It will extract the token and check with SAND to
     # verify whether the token client is allowed to access this service.
     #
-    # options[:num_retry]: Number of retries is defaulted to @max_retry unless options[:num_retry] is given
+    # options[:num_retry]: Number of retries is defaulted to @default_retry_count unless options[:num_retry] is given
     # on a per request basis. For a service, num_retry is applied when it has problem
     # connecting to Sand for an access token. The token verificatioin
     # does not perform any retry.

@@ -22,12 +22,12 @@ opts = {
   token_path: "/oauth2/token",  # Required. The OAuth token endpoint on the OAuth2 server.
 
   # Below also shows their default values
-  skip_tls_verify:  false,  # Skip verifying the TLS certificate
-  max_retry:        5,      # Maximum number of retries on connection error
-  race_ttl_in_secs: 10,     # Extended TTL for racing condition for cache
-  cache:            nil,    # For example, Rails.cache
-  cache_root:       "sand", # A string as the root namespace in the cache
-  logger:           nil     # For example, Rails.logger
+  skip_tls_verify:     false,  # Skip verifying the TLS certificate
+  default_retry_count: 5,      # Default number of retries on connection error
+  race_ttl_in_secs:    10,     # Extended TTL for racing condition for cache
+  cache:               nil,    # For example, Rails.cache
+  cache_root:          "sand", # A string as the root namespace in the cache
+  logger:              nil     # For example, Rails.logger
 }
 client = Sand::Client.new(opts)
 
