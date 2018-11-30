@@ -181,39 +181,6 @@ describe Sand::Client do
     end
   end
 
-  describe '#cache_key' do
-    before do
-      client.cache_root = 'root'
-      allow(Sand::Client).to receive(:cache_type).and_return('type')
-    end
-
-    it 'returns the cache key' do
-      expect(client.cache_key('key', 'scope', nil)).to eq('root/type/key/scope')
-      expect(client.cache_key('key', ['scope'], nil)).to eq('root/type/key/scope')
-      expect(client.cache_key('key', ['scope1', 'scope2'], nil)).to eq('root/type/key/scope1_scope2')
-      expect(client.cache_key('key', ['scope1', 'scope2', 'scope3'], nil)).to eq('root/type/key/scope1_scope2_scope3')
-      expect(client.cache_key('key', ['scope1', 'scope2'], 'resource1')).to eq('root/type/key/scope1_scope2/resource1')
-    end
-
-    context 'with either key or scopes being empty' do
-      it 'accepts scopes as empty array or nil' do
-        expect(client.cache_key('key', nil, nil)).to eq('root/type/key')
-        expect(client.cache_key('key', [], nil)).to eq('root/type/key')
-
-        expect(client.cache_key(nil, nil, nil)).to eq('root/type/')
-        expect(client.cache_key(nil, [], nil)).to eq('root/type/')
-      end
-
-      it 'accepts keys as empty string or nil' do
-        expect(client.cache_key('', 'scope', nil)).to eq('root/type//scope')
-        expect(client.cache_key('', ['scope'], nil)).to eq('root/type//scope')
-
-        expect(client.cache_key(nil, 'scope', nil)).to eq('root/type//scope')
-        expect(client.cache_key(nil, ['scope1', 'scope2'], nil)).to eq('root/type//scope1_scope2')
-      end
-    end
-  end
-
   describe '#status_code' do
     it 'returns nil when given nil' do
       expect(client.send(:status_code, nil)).to be_nil

@@ -36,12 +36,24 @@ module Sand
       raise NotImplementedError
     end
 
-    def cache_key(key, scopes, resource)
+    def cache_key(key, scopes, opts = {})
       ret = @cache_root.dup
       ret << '/' << self.class.cache_type
-      ret << '/' << key.to_s
-      ret << '/' << Array(scopes).join('_') unless scopes.nil? || scopes.empty?
-      ret << '/' << resource unless resource.nil?
+
+      key = key.to_s.strip
+      ret << '/' << key unless key.empty?
+
+      scopes = Array(scopes)
+      unless scopes.empty?
+        scopes.sort!
+        ret << '/' << scopes.join('_')
+      end
+
+      if opts.is_a? Hash
+        ret << '/' << opts[:resource] if opts.key?(:resource) && !opts[:resource].to_s.empty?
+        ret << '/' << opts[:action] if opts.key?(:action) && !opts[:action].to_s.empty?
+      end
+
       ret
     end
 

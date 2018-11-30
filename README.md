@@ -22,39 +22,41 @@ opts = {
   token_path: "/oauth2/token",  # Required. The OAuth token endpoint on the OAuth2 server.
 
   # Below also shows their default values
-  skip_tls_verify:     false,  # Skip verifying the TLS certificate
+  skip_tls_verify:     false,  # Skip verifying the TLS certificate. Default is not to skip.
   default_retry_count: 5,      # Default number of retries on connection error
   race_ttl_in_secs:    10,     # Extended TTL for racing condition for cache
-  cache:               nil,    # For example, Rails.cache
+  cache:               nil,    # Always use a cache!! For example, Rails.cache
   cache_root:          "sand", # A string as the root namespace in the cache
   logger:              nil     # For example, Rails.logger
 }
 client = Sand::Client.new(opts)
 
 client.request(cache_key: 'cache_key', scopes: ['scope1', 'scope2'], num_retry: 3) do |token|
-  # Make http request with net/http, Faraday, Httparty, etc...
-  # with "Bearer token" in the Authorization header
-  # return the response
+  response = ... # Make http request with net/http, Faraday, Httparty, etc...
+                 # with "Bearer token" in the Authorization header
+  response       # **** MUST **** return the response object in the block
 end
 ```
+
+Please note that the block for Sand::Client's request method MUST return the response object at the end of the block.
 
 Sand::Service can verify the token with the OAuth2 server. The result can also be cached to avoid checking on the same token on every request. To initialize a Sand::Service instance is to provide the above options PLUS additional options below:
 
 ```
 opts = {
   ... # Same as Sand::Client's options above
-  resource:          "some-service",          # Required. This service's unique resource name registered with the OAuth2 server
   token_verify_path: "/warden/token/allowed", # Required. The token verification endpoint
+  resource:          "default:resource",      # This service's default resource name registered with the OAuth2 server
 
   # Below also shows their default values
   default_exp_time: 3600     # The default expiry time for cache for invalid tokens and also valid tokens without expiry times.
-  scopes:           nil      # A string array of scopes required to access the token verification endpoint
+  scopes:           nil      # A string array. These are the scopes required to access the OAuth2 server's token verification endpoint
 }
 service = Sand::Service.new(opts)
 
 # Usage Example with Rails request
 begin
-  result = service.check_request(request, scopes: ['target_scope1', 'target_scope2'], action: 'action', num_retry: 5)
+  result = service.check_request(request, resource: 'some:resource', scopes: ['target_scope1', 'target_scope2'], action: 'action', num_retry: 5)
   render status: service.access_denied_code if !result["allowed"]
 rescue => e
   render status: service.error_code

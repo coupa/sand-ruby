@@ -11,8 +11,8 @@ module Sand
     end
 
     # opts = {
-    #   resource: Required. This service's unique resource name registered with SAND
-    #   token_verify_path: SAND's token allowed endpoint
+    #   token_verify_path: Required. SAND's token allowed endpoint
+    #   resource: This service's unique resource name registered with SAND
     #   default_exp_time: The default expiry time for cache for invalid tokens and also valid tokens without expiry times.
     #   scopes: The scopes required to access the token verification endpoint
     # }
@@ -53,6 +53,7 @@ module Sand
       else
         raise AuthenticationError.new('Failed to extract token from the request')
       end
+
       begin
         return check_token(token, options)
       rescue => e
@@ -71,7 +72,7 @@ module Sand
       return {'allowed' => false} if token.empty?
 
       # Check if cached
-      ckey = cache_key(token, options[:scopes], options[:resource]) if @cache
+      ckey = cache_key(token, options[:scopes], resource: options[:resource], action: options[:action]) if @cache
       if ckey
         cached = @cache.read(ckey)
         return cached unless cached.nil?
@@ -109,8 +110,8 @@ module Sand
       token = token.to_s
       return {'allowed' => false} if token.empty?
 
-      resource = options.fetch(:resource, @resource)
-      raise ArgumentError.new("resource is required") if resource.nil? || resource.empty?
+      resource = options.fetch(:resource, @resource).to_s.strip
+      raise ArgumentError.new("resource is required") if resource.empty?
 
       access_token = self.token(cache_key: 'service-access-token', scopes: @scopes, num_retry: options[:num_retry])
       data = {
