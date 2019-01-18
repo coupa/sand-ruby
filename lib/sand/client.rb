@@ -34,7 +34,7 @@ module Sand
     # end
     def request(options = {}, &block)
       caching_key = options[:cache_key] || ''
-      scopes = options[:scopes]
+
       # request_retry_limit cannot be 0 or less, because if a client's token is
       # expired, it must retry at least once to get a fresh token and try the request
       # to service again
@@ -77,7 +77,7 @@ module Sand
         retry_count += 1
 
         # Prevent reading the token from cache
-        @cache.delete(cache_key(caching_key, scopes, nil)) if @cache
+        @cache.delete(cache_key(caching_key, options[:scopes])) if @cache
 
         t = self.token(options)
         resp = begin
@@ -101,17 +101,16 @@ module Sand
     # caching_key will be used as the cache key for caching the token
     def token(options = {})
       ckey = nil
-      scopes = options[:scopes]
       caching_key = options.delete(:cache_key).to_s
-      if @cache && !caching_key.empty?
-        ckey = cache_key(caching_key, scopes, nil)
+      if @cache
+        ckey = cache_key(caching_key, options[:scopes])
         token = @cache.read(ckey)
         return token unless token.nil?
       end
       hash = oauth_token(options)
       raise AuthenticationError.new('Invalid access token') if hash[:access_token].nil? || hash[:access_token].empty?
 
-      if @cache && !caching_key.empty? && hash[:expires_in] >= 0
+      if @cache && hash[:expires_in] >= 0
         #expires_in = 0 means no expiry limit
         @cache.write(ckey, hash[:access_token],
             expires_in: hash[:expires_in],
@@ -124,7 +123,6 @@ module Sand
     # backoff time of 1, 2, 4, 8, 16,... seconds
     # If options[:num_retry] is not present or < 0, it will use @default_retry_count as the retry number
     def oauth_token(options = {})
-      scopes = options[:scopes]
       retry_limit = options[:num_retry] && options[:num_retry].to_i >= 0 ? options[:num_retry].to_i : @default_retry_count
 
       # The 'auth_scheme' option is for oauth2 1.3.0 gem, but it will work for 1.2 since it's just an option
@@ -134,7 +132,7 @@ module Sand
           auth_scheme: :basic_auth)
       retry_count = 0
       begin
-        token = client.client_credentials.get_token(scope: Array(scopes).join(' '))
+        token = client.client_credentials.get_token(scope: Array(options[:scopes]).join(' '))
         {access_token: token.token.to_s, expires_in: token.expires_in.to_i}
       rescue => e
         if retry_count < retry_limit
