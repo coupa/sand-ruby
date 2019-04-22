@@ -174,6 +174,17 @@ describe Sand::Service do
       end
     end
 
+    context 'Sand responds with 500' do
+      let(:body) { '' }
+      before{ allow_any_instance_of(Faraday::Connection).to receive(:post).and_return(Response.new(body, 500)) }
+
+      it 'returns allowed => false without caching' do
+        expect(service.cache).to receive(:read)
+        expect(service.cache).not_to receive(:write)
+        expect(subject).to eq('allowed' => false)
+      end
+    end
+
     describe 'cache operations' do
       context 'token and result already cached' do
         it 'gets the result from cache' do
@@ -295,6 +306,15 @@ describe Sand::Service do
         subject { service.verify_token(token, resource: 'b') }
 
         it_behaves_like 'a valid sand service'
+      end
+    end
+
+    context 'Sand responds with 500' do
+      let(:body) { '' }
+      before{ allow_any_instance_of(Faraday::Connection).to receive(:post).and_return(Response.new(body, 500)) }
+
+      it 'returns nil' do
+        expect(subject).to be_nil
       end
     end
   end
