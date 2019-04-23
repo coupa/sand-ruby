@@ -79,6 +79,8 @@ module Sand
       end
 
       resp = verify_token(token, options)
+
+      return {'allowed' => false} unless resp.is_a? Hash
       # To ensure that allowed is true if and only if it is really true
       # If allowed is not true, make sure nothing else is included
       resp = {'allowed' => false} unless resp['allowed'] == true
@@ -131,7 +133,12 @@ module Sand
         req.headers['Content-Type'] = 'application/json'
         req.body = data.to_json
       end
-      raise AuthenticationError.new("Error response from the authentication service: #{resp.status}") if resp.status != 200
+      if resp.status != 200
+        err = "Error response from the authentication service: #{resp.status} - #{resp.body}"
+        logger&.warn(err)
+        return nil if resp.status == 500
+        raise AuthenticationError.new(err)
+      end
       JSON.parse(resp.body)
     end
 
