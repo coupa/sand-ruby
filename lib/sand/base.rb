@@ -45,7 +45,7 @@ module Sand
 
       scopes = Array(scopes)
       unless scopes.empty?
-        scopes.sort!
+        scopes = scopes.sort
         ret << '/' << scopes.join('_')
       end
 
