@@ -1,7 +1,7 @@
 module Sand
   class Base
     attr_accessor :client_id, :client_secret, :token_site, :token_path,
-        :race_ttl_in_secs, :skip_tls_verify, :default_retry_count, :cache, :cache_root, :logger
+        :skip_tls_verify, :default_retry_count, :cache, :cache_root, :logger
 
     # opts = {
     #   client_id: Required
@@ -11,7 +11,6 @@ module Sand
     #   skip_tls_verify: Skip verifying the TLS certificate
     #   default_retry_count: Default number of retries on connection error
     #   max_retry: Deprecated. Same as :default_retry_count.
-    #   race_ttl_in_secs: Extended TTL for racing condition for cache
     #   cache: For example, Rails.cache
     #   cache_root: A string as the root namespace in the cache
     # }
@@ -23,9 +22,7 @@ module Sand
       @token_path = opts.delete(:token_path) { |o| raise ArgumentError.new("#{o} is required") }
       @skip_tls_verify = opts.delete(:skip_tls_verify) || false
       # Support :max_retry for backward compatibility
-      @default_retry_count = opts.delete(:default_retry_count) || opts.delete(:max_retry) || 5
-      # Default race ttl to 10 seconds
-      @race_ttl_in_secs = opts.delete(:race_ttl_in_secs) || 10
+      @default_retry_count = (opts.delete(:default_retry_count) || opts.delete(:max_retry) || 5).to_i
       # If @cache is nil, there will be no caching of tokens.
       @cache = opts.delete(:cache)
       @cache_root = opts.delete(:cache_root) || 'sand'

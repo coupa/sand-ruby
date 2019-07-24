@@ -110,11 +110,10 @@ module Sand
       hash = oauth_token(options)
       raise AuthenticationError.new('Invalid access token') if hash[:access_token].nil? || hash[:access_token].empty?
 
-      if @cache && hash[:expires_in] >= 0
-        #expires_in = 0 means no expiry limit
-        @cache.write(ckey, hash[:access_token],
-            expires_in: hash[:expires_in],
-            race_condition_ttl: @race_ttl_in_secs)
+      expire_time = hash[:expires_in]
+      if @cache && expire_time >= 0
+        # expire_time = 0 means no expiry limit
+        @cache.write(ckey, hash[:access_token], expires_in: expire_time)
       end
       hash[:access_token]
     end
