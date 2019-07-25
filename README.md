@@ -24,7 +24,6 @@ opts = {
   # Below also shows their default values
   skip_tls_verify:     false,  # Skip verifying the TLS certificate. Default is not to skip.
   default_retry_count: 5,      # Default number of retries on connection error
-  race_ttl_in_secs:    10,     # Extended TTL for racing condition for cache
   cache:               nil,    # Always use a cache!! For example, Rails.cache
   cache_root:          "sand", # A string as the root namespace in the cache
   logger:              nil     # For example, Rails.logger

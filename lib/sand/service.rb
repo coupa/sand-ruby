@@ -88,8 +88,7 @@ module Sand
       # Keep result in cache
       if ckey
         exp = resp['allowed'] ? expiry_time(resp['exp']) : @default_exp_time
-        @cache.write(ckey, resp,
-            expires_in: exp, race_condition_ttl: @race_ttl_in_secs)
+        @cache.write(ckey, resp, expires_in: exp)
       end
 
       resp
