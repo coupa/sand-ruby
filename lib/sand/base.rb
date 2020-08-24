@@ -1,14 +1,14 @@
 module Sand
   class Base
     attr_accessor :client_id, :client_secret, :token_site, :token_path,
-        :skip_tls_verify, :default_retry_count, :cache, :cache_root, :logger
+        :ssl_min_version, :default_retry_count, :cache, :cache_root, :logger
 
     # opts = {
     #   client_id: Required
     #   client_secret: Required
     #   token_site: Required
     #   token_path: Required
-    #   skip_tls_verify: Skip verifying the TLS certificate
+    #   ssl_min_version: Minimum TLS version supported. For Faraday >= v1.0, the value should be like :TLS1_2. For Faraday < v1.0, the value should be :TLSv1_2
     #   default_retry_count: Default number of retries on connection error
     #   max_retry: Deprecated. Same as :default_retry_count.
     #   cache: For example, Rails.cache
@@ -20,13 +20,24 @@ module Sand
       @client_secret = opts.delete(:client_secret) { |o| raise ArgumentError.new("#{o} is required") }
       @token_site = opts.delete(:token_site) { |o| raise ArgumentError.new("#{o} is required") }
       @token_path = opts.delete(:token_path) { |o| raise ArgumentError.new("#{o} is required") }
-      @skip_tls_verify = opts.delete(:skip_tls_verify) || false
       # Support :max_retry for backward compatibility
       @default_retry_count = (opts.delete(:default_retry_count) || opts.delete(:max_retry) || 5).to_i
       # If @cache is nil, there will be no caching of tokens.
       @cache = opts.delete(:cache)
       @cache_root = opts.delete(:cache_root) || 'sand'
       @logger = opts.delete(:logger)
+      @ssl_min_version = opts.delete(:ssl_min_version)
+
+      # Faraday < 1.0 has :version in SSLOptions class, with value like :TLSv1_2
+      # >= 1.0 has :min_version with value like :TLS1_2
+      o = Faraday::SSLOptions.new
+      if o.respond_to?(:min_version)
+        @faraday_ssl_version_key = :min_version
+        @ssl_min_version ||= :TLS1_2
+      else
+        @faraday_ssl_version_key = :version
+        @ssl_min_version ||= :TLSv1_2
+      end
     end
 
     def self.cache_type
