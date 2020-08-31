@@ -123,7 +123,11 @@ module Sand
         context: options.fetch(:context, @context),
       }
       conn = Faraday.new(url: @token_site) do |faraday|
-        faraday.ssl.verify = false if @skip_tls_verify == true
+        if @faraday_ssl_version_key == :min_version
+          faraday.ssl.min_version = @ssl_min_version
+        else
+          faraday.ssl.version = @ssl_min_version
+        end
         faraday.adapter(Faraday.default_adapter)
       end
       conn.authorization(:Bearer, access_token)

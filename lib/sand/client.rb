@@ -127,7 +127,7 @@ module Sand
       # The 'auth_scheme' option is for oauth2 1.3.0 gem, but it will work for 1.2 since it's just an option
       client = OAuth2::Client.new(CGI.escape(@client_id), CGI.escape(@client_secret),
           site: @token_site, token_url: @token_path,
-          ssl: {:verify => @skip_tls_verify != true},
+          ssl: { @faraday_ssl_version_key => @ssl_min_version },
           auth_scheme: :basic_auth)
       retry_count = 0
       begin
