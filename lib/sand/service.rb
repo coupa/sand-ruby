@@ -4,6 +4,7 @@ require 'time'
 
 module Sand
   class Service < Client
+    SERVICE_CACHE_KEY = 'service-access-token'.freeze
     attr_accessor :resource, :token_verify_path, :default_exp_time, :scopes
 
     def self.cache_type
@@ -61,7 +62,7 @@ module Sand
           logger.error(e.message)
           logger.error(e.backtrace[0..15].join("\n"))
         end
-        raise AuthenticationError.new('Service failed to verify the token')
+        raise AuthenticationError.new("Service failed to verify the token: #{e.message}")
       end
     end
 
@@ -72,13 +73,20 @@ module Sand
       return {'allowed' => false} if token.empty?
 
       # Check if cached
-      ckey = cache_key(token, options[:scopes], resource: options[:resource], action: options[:action]) if @cache
-      if ckey
+      ckey = cache_key(token, options[:scopes], resource: options[:resource], action: options[:action])
+      if @cache
         cached = @cache.read(ckey)
         return cached unless cached.nil?
       end
 
-      resp = verify_token(token, options)
+      resp = begin
+        verify_token(token, options)
+      rescue ServiceUnauthorizedError
+        # Clear service token from cache and try once again
+        @cache.delete(cache_key(SERVICE_CACHE_KEY, @scopes)) if @cache
+
+        verify_token(token, options)
+      end
 
       return {'allowed' => false} unless resp.is_a? Hash
       # To ensure that allowed is true if and only if it is really true
@@ -86,7 +94,7 @@ module Sand
       resp = {'allowed' => false} unless resp['allowed'] == true
 
       # Keep result in cache
-      if ckey
+      if @cache
         exp = resp['allowed'] ? expiry_time(resp['exp']) : @default_exp_time
         @cache.write(ckey, resp, expires_in: exp)
       end
@@ -114,7 +122,7 @@ module Sand
       resource = options.fetch(:resource, @resource).to_s.strip
       raise ArgumentError.new("resource is required") if resource.empty?
 
-      access_token = self.token(cache_key: 'service-access-token', scopes: @scopes, num_retry: options[:num_retry])
+      access_token = self.token(cache_key: SERVICE_CACHE_KEY, scopes: @scopes, num_retry: options[:num_retry])
       data = {
         scopes: Array(options[:scopes]),
         token: token,
@@ -139,7 +147,13 @@ module Sand
       if resp.status != 200
         err = "Error response from the authentication service: #{resp.status} - #{resp.body}"
         logger&.warn(err)
-        return nil if resp.status == 500
+
+        case resp.status
+        when 500
+          return nil
+        when 401
+          raise ServiceUnauthorizedError, "Service is unauthorized to access token verification endpoint"
+        end
         raise AuthenticationError.new(err)
       end
       JSON.parse(resp.body)

@@ -175,13 +175,24 @@ describe Sand::Service do
     end
 
     context 'Sand responds with 500' do
-      let(:body) { '' }
-      before{ allow_any_instance_of(Faraday::Connection).to receive(:post).and_return(Response.new(body, 500)) }
+      before { allow(service).to receive(:verify_token).and_return(nil) }
 
       it 'returns allowed => false without caching' do
         expect(service.cache).to receive(:read)
         expect(service.cache).not_to receive(:write)
         expect(subject).to eq('allowed' => false)
+      end
+    end
+
+    context 'Sand responds with 401' do
+      before { allow(service).to receive(:verify_token).and_raise(Sand::ServiceUnauthorizedError) }
+
+      it 'retries once more' do
+        expect(service).to receive(:verify_token).twice
+        expect(service.cache).to receive(:read)
+        expect(service.cache).not_to receive(:write)
+        expect(service.cache).to receive(:delete)
+        expect{subject}.to raise_error(Sand::ServiceUnauthorizedError)
       end
     end
 
@@ -315,6 +326,15 @@ describe Sand::Service do
 
       it 'returns nil' do
         expect(subject).to be_nil
+      end
+    end
+
+    context 'Sand responds with 401' do
+      let(:body) { '' }
+      before { allow_any_instance_of(Faraday::Connection).to receive(:post).and_return(Response.new(body, 401)) }
+
+      it 'raises an error' do
+        expect{subject}.to raise_error(Sand::ServiceUnauthorizedError)
       end
     end
   end
