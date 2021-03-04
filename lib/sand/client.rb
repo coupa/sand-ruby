@@ -103,23 +103,22 @@ module Sand
     def token(options = {})
       ckey = nil
       caching_key = options[:cache_key].to_s
-      if @cache
-        ckey = cache_key(caching_key, options[:scopes])
-        token = @cache.read(ckey)
-        return token unless token.nil?
-      end
+
+      ckey = cache_key(caching_key, options[:scopes])
+      token = cache_read(ckey)
+      return token unless token.nil?
 
       hash = oauth_token(options)
       raise AuthenticationError.new('Invalid access token') if hash[:access_token].nil? || hash[:access_token].empty?
 
       expire_time = hash[:expires_in].to_i
-      if @cache && expire_time >= 0
+      if expire_time >= 0
         # expire_time = 0 means no expiry limit, and the token will be cached forever (should not happen)
 
         # Subtract TOKEN_CACHE_MARGIN so that we expires the cache sooner so that
         # we have lower chance of expired token when service is verifying it.
         expire_time -= TOKEN_CACHE_MARGIN if expire_time > TOKEN_CACHE_MARGIN
-        @cache.write(ckey, hash[:access_token], expires_in: expire_time)
+        cache_write(ckey, hash[:access_token], expire_time)
       end
       hash[:access_token]
     end

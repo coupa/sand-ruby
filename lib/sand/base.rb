@@ -65,6 +65,39 @@ module Sand
       ret
     end
 
+    # Wrap the cache read/write methods to add the expiration timestamp, in case
+    # some cache stores do not support expires_in
+    def cache_read(key)
+      return nil if cache.nil?
+
+      hash = cache.read(key)
+      return nil if hash.nil?
+
+      expiry = hash[:expiry_epoch_sec]
+      # Use <= because it may take time for the service to verify a token.
+      # If expiry is 0, per cache store implementation it means caching forever
+      if expiry > 0 && expiry <= Time.now.to_i
+        cache.delete(key)
+        return nil
+      end
+      return hash[:data]
+    end
+
+    # Wrap the cache read/write methods to add the expiration timestamp, in case
+    # some cache stores do not support expires_in
+    def cache_write(key, payload, expires_in_sec)
+      return if cache.nil?
+
+      expires_in_sec = expires_in_sec.to_i
+      expires_in_sec = 0 if expires_in_sec < 0
+
+      data = {
+        data: payload,
+        expiry_epoch_sec: expires_in_sec == 0 ? 0 : Time.now.to_i + expires_in_sec
+      }
+      cache.write(key, data, expires_in: expires_in_sec)
+    end
+
     # When services successfully check tokens with authentication service but the
     # token is denied access, they must use this method to set the response code.
     def access_denied_code

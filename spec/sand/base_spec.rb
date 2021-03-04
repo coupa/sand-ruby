@@ -40,4 +40,75 @@ describe Sand::Base do
       end
     end
   end
+
+  describe '#cache_read' do
+    context 'when there is no cache' do
+      it 'returns nil' do
+        base.cache = nil
+        data = ''
+        expect{data = base.cache_read('')}.not_to raise_error
+        expect(data).to be_nil
+      end
+    end
+
+    context 'when key does not exist or data is nil' do
+      it 'returns nil' do
+        base.cache.write('test', nil)
+        expect(base.cache_read('not_exist')).to be_nil
+        expect(base.cache_read('test')).to be_nil
+      end
+    end
+
+    context 'when data is expired' do
+      it 'deletes the key from cache and return nil' do
+        base.cache.write('test', { data: 'hi', expiry_epoch_sec: 1 })
+        expect(base.cache).to receive(:delete).with('test')
+        expect(base.cache_read('test')).to be_nil
+      end
+    end
+
+    context 'when expiry time is 0' do
+      it 'returns the data' do
+        base.cache.write('test', { data: 'hi', expiry_epoch_sec: 0 })
+        expect(base.cache).not_to receive(:delete)
+        expect(base.cache_read('test')).to eq('hi')
+      end
+    end
+
+    context 'when data has not expired' do
+      it 'returns the data' do
+        base.cache.write('test', { data: 'hi', expiry_epoch_sec: Time.now.to_i + 1000000 })
+        expect(base.cache).not_to receive(:delete)
+        expect(base.cache_read('test')).to eq('hi')
+      end
+    end
+  end
+
+  describe '#cache_write' do
+    context 'when there is no cache' do
+      it 'does nothing' do
+        base.cache = nil
+        expect(base.cache).not_to receive(:write)
+        expect{base.cache_write('', '', 0)}.not_to raise_error
+      end
+    end
+
+    context 'when expires_in_sec > 0' do
+      it 'writes to the cache' do
+        allow(Time).to receive(:now).and_return(100)
+        expect(base.cache).to receive(:write).with('key', { data: 'data', expiry_epoch_sec: 110 }, expires_in: 10)
+        base.cache_write('key', 'data', 10)
+      end
+    end
+
+    context 'when expires_in_sec <= 0' do
+      it 'writes to the cache with 0 expiry time' do
+        expect(base.cache).to receive(:write).with('key', { data: 'data', expiry_epoch_sec: 0 }, expires_in: 0)
+        base.cache_write('key', 'data', -1)
+
+        expect(base.cache).to receive(:write).with('key', { data: 'data', expiry_epoch_sec: 0 }, expires_in: 0)
+        base.cache_write('key', 'data', 0)
+      end
+    end
+  end
 end

@@ -74,10 +74,8 @@ module Sand
 
       # Check if cached
       ckey = cache_key(token, options[:scopes], resource: options[:resource], action: options[:action])
-      if @cache
-        cached = @cache.read(ckey)
-        return cached unless cached.nil?
-      end
+      cached = cache_read(ckey)
+      return cached unless cached.nil?
 
       resp = begin
         verify_token(token, options)
@@ -94,10 +92,8 @@ module Sand
       resp = {'allowed' => false} unless resp['allowed'] == true
 
       # Keep result in cache
-      if @cache
-        exp = resp['allowed'] ? expiry_time(resp['exp']) : @default_exp_time
-        @cache.write(ckey, resp, expires_in: exp)
-      end
+      exp = resp['allowed'] ? expiry_time(resp['exp']) : @default_exp_tim
+      cache_write(ckey, resp, exp)
 
       resp
     end
@@ -178,8 +174,6 @@ module Sand
     end
 
     def default_context
-      # TODO: Consider adding remoteIP?
-      # See https://www.ory.sh/docs/guides/latest/1-hydra/2-overview/3-access-control
       {}
     end
   end

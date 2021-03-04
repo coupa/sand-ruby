@@ -67,7 +67,7 @@ describe Sand::Client do
     before{ allow(client).to receive(:oauth_token).and_return({access_token: 'retrieve_token', expires_in: 60}) }
 
     describe 'reading from cache' do
-      before{ client.cache.write(client.cache_key('test', ['scope'], nil), 'testToken') }
+      before{ client.cache_write(client.cache_key('test', ['scope']), 'testToken', 0) }
 
       it 'uses the token from cache' do
         expect(client).not_to receive(:oauth_token)
@@ -87,7 +87,7 @@ describe Sand::Client do
     describe 'writing to cache' do
       it 'writes the token to cache' do
         expect(subject).to eq('retrieve_token')
-        expect(client.cache.read(client.cache_key(resource, ['scope'], nil))).to eq('retrieve_token')
+        expect(client.cache_read(client.cache_key(resource, ['scope'], nil))).to eq('retrieve_token')
       end
     end
 

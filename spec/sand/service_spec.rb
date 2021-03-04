@@ -199,7 +199,7 @@ describe Sand::Service do
     describe 'cache operations' do
       context 'token and result already cached' do
         it 'gets the result from cache' do
-          service.cache.write(service.cache_key(token, ['scope'], nil), {'allowed' => true, 'sub' => 'test'})
+          service.cache_write(service.cache_key(token, ['scope'], nil), {'allowed' => true, 'sub' => 'test'}, 0)
           expect(service).not_to receive(:verify_token)
           expect(subject['allowed']).to be(true)
           expect(subject['sub']).to eq('test')
@@ -210,9 +210,9 @@ describe Sand::Service do
         before{ allow(service).to receive(:verify_token).and_return('allowed' => false) }
 
         it 'caches token verification result' do
-          expect(service.cache.read(service.cache_key(token, ['scope'], nil))).to be_nil
+          expect(service.cache_read(service.cache_key(token, ['scope'], nil))).to be_nil
           expect(subject['allowed']).to be(false)
-          expect(service.cache.read(service.cache_key(token, ['scope'], nil))).to eq({'allowed' => false})
+          expect(service.cache_read(service.cache_key(token, ['scope'], nil))).to eq({'allowed' => false})
         end
       end
 
